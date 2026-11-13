@@ -27,3 +27,22 @@ Goal: one real transaction chain: origin `Ping` event -> Lasna `react()` -> call
 ## Record
 
 Save addresses and transaction hashes in `deployments/*.json` (no secrets), and the hop latency from explorer timestamps.
+
+# Runbook: full deployment
+
+Only after the spike loop above has produced a `Pong` on Base Sepolia.
+
+1. `RVM_ADDR`: compute from the deployer's next Lasna nonce: `cast compute-address <deployer> --nonce $(cast nonce <deployer> --rpc-url lasna)`. The coordinator must be the next Lasna contract deployed from that account, so deploy nothing else on Lasna in between.
+2. `forge script script/Deploy.s.sol:DeployBase --rpc-url base_sepolia --broadcast` -> token, `DemoNFT`, `AuctionEscrow`, base vault. Also funds callback-proxy reserves for the escrow and vault in Base Sepolia ETH.
+3. `forge script script/Deploy.s.sol:DeployUni --rpc-url unichain_sepolia --broadcast` -> token, unichain vault, reserve funding.
+4. `forge script script/Deploy.s.sol:DeployLasna --rpc-url lasna --broadcast` with `ESCROW_ADDR`, `BASE_VAULT_ADDR`, `UNI_VAULT_ADDR`. The script fails if the coordinator address differs from `RVM_ADDR`.
+5. Check `debt` and `reserves` for the escrow and both vaults on their callback proxies, and for the coordinator on the system contract, before the first intent.
+6. Record addresses in `deployments/*.json` (no secrets).
+
+## Demo scenario (real transactions only)
+
+1. Seller: `DemoNFT.mint()`, approve the escrow, `createCampaign` with both chains enabled.
+2. Buyer A (Unichain): `faucet`, `approve`, `deposit`, `submitIntent`. Buyer B (Base): the same on Base.
+3. Wait for the coordinator and callbacks; open the transactions on the Base, Unichain and Lasna explorers.
+4. Verify: one `Settled`, the NFT owner is the winner, the seller was paid on the winner's chain, the loser's balance is whole again after `IntentRejected` or `unlock`.
+5. Record hop latency from explorer timestamps. Do not estimate.
