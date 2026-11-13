@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import BuyerPanel from "@/components/BuyerPanel";
+import CampaignActions from "@/components/CampaignActions";
 import NotDeployed from "@/components/NotDeployed";
 import { readCampaign } from "@/lib/campaign";
 import { addressUrl, CANONICAL_CHAIN, chainById } from "@/lib/chains";
@@ -68,6 +69,7 @@ export default function CampaignPage() {
           )}
         </div>
       </div>
+      <CampaignActions campaign={c} now={now} />
       <BuyerPanel campaign={c} />
     </>
   );
