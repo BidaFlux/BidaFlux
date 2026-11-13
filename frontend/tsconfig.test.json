@@ -7,7 +7,8 @@
     "incremental": false,
     "outDir": ".test-out",
     "rootDir": "src/lib",
-    "plugins": []
+    "plugins": [],
+    "types": ["node"]
   },
   "include": ["src/lib/price.ts", "src/lib/price.test.ts"]
 }
