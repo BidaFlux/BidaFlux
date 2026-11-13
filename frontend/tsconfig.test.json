@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "noEmit": false,
+    "incremental": false,
+    "outDir": ".test-out",
+    "rootDir": "src/lib",
+    "plugins": []
+  },
+  "include": ["src/lib/price.ts", "src/lib/price.test.ts"]
+}

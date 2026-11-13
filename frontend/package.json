@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "sync-abis": "node scripts/sync-abis.mjs"
+    "sync-abis": "node scripts/sync-abis.mjs",
+    "test": "tsc -p tsconfig.test.json && node --test .test-out/"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.107.1",
