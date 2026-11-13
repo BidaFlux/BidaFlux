@@ -51,6 +51,8 @@ The first parameter of every callback is the injected reactive-contract address 
 | 2 | each `PaymentVault` | `finalizeCampaign(address rvm, bytes32 campaignId, bytes32 winnerIntentId, uint256 winnerChainId, uint256 price, address payout)` |
 | 2 | source `PaymentVault` | `releaseIntent(address rvm, bytes32 intentId)` (for `IntentRejected`) |
 
+The reactive contract must **not** relay `IntentRejected` with reason 2 (duplicate) to `releaseIntent`: a re-delivered winning intent would otherwise unlock the winner's funds. All other reasons are relayed.
+
 Authorization on every callback target: `onlyServiceProvider` (callback proxy) and `onlyCallbackSender(rvm)`.
 
 Callback proxies: Base `0x476F44b11F5C942c58f4c8E3d0300E5710743585`, Unichain `0x775c9B990ADe401060B78D0e98684eEf8d2466C1` (see `reactive-integration-notes.md`).
