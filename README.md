@@ -320,7 +320,7 @@ The intended technology stack includes:
 | Payment standard | ERC-20 |
 | Contracts framework | Foundry (Solidity 0.8.29, via-IR) |
 | Reactive library | [reactive-lib-omni](https://github.com/Reactive-Network/reactive-lib-omni) |
-| Frontend | Not started (planned: Next.js, wagmi, viem) |
+| Frontend | Next.js, wagmi, viem (pnpm) |
 
 
 ---
@@ -410,7 +410,7 @@ bidaflux/
 └── LICENSE
 ```
 
-Planned: `frontend/` and `deployments/` (addresses and transaction hashes, added after deployment).
+`frontend/` is a Next.js app (wagmi, viem). Planned: `deployments/` (addresses and transaction hashes, added after deployment).
 
 ---
 
@@ -435,6 +435,17 @@ forge test
 
 The tests include an end-to-end test that feeds real event logs through the coordinator and delivers its callbacks to the real escrow and vaults. They run on a local chain with a mock of the Reactive system contract, so they do not replace the on-chain loop described below.
 
+### Frontend
+
+```bash
+cd frontend
+corepack pnpm@9.15.0 install
+cp .env.example .env.local   # fill in addresses after deployment
+corepack pnpm@9.15.0 dev
+```
+
+The UI reads only on-chain data. Until `.env.local` is filled in it shows a "not configured" notice, not sample data.
+
 ### Environment variables
 
 Copy `.env.example` to `.env` and fill it in. Never commit private keys, wallet seed phrases, or sensitive credentials.
@@ -451,7 +462,7 @@ Copy `.env.example` to `.env` and fill it in. Never commit private keys, wallet 
 | Live Reactive loop on Lasna (callbacks on-chain) | Not yet deployed |
 | Deployed addresses and transaction hashes | Not yet available; will be added here and in `deployments/` |
 | Measured latency | Not yet measured |
-| Frontend and activity monitor | Not started |
+| Frontend (auctions, buyer and seller flows, activity monitor) | Built and type-checked; not yet exercised against live contracts |
 
 ---
 
