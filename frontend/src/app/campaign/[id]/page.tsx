@@ -3,9 +3,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useAccount } from "wagmi";
 import BuyerPanel from "@/components/BuyerPanel";
 import CampaignActions from "@/components/CampaignActions";
 import NotDeployed from "@/components/NotDeployed";
+import SellerPanel from "@/components/SellerPanel";
 import { readCampaign } from "@/lib/campaign";
 import { addressUrl, CANONICAL_CHAIN, chainById } from "@/lib/chains";
 import { deployment, isDeployed } from "@/lib/config";
@@ -15,6 +17,7 @@ import { priceAt } from "@/lib/price";
 export default function CampaignPage() {
   const { id } = useParams<{ id: string }>();
   const campaignId = id as `0x${string}`;
+  const { address } = useAccount();
   const { data: c, isLoading, error } = useQuery({
     queryKey: ["campaign", campaignId],
     enabled: isDeployed,
@@ -70,7 +73,11 @@ export default function CampaignPage() {
         </div>
       </div>
       <CampaignActions campaign={c} now={now} />
-      <BuyerPanel campaign={c} now={now} />
+      {address?.toLowerCase() === c.seller.toLowerCase() ? (
+        <SellerPanel campaign={c} now={now} />
+      ) : (
+        <BuyerPanel campaign={c} now={now} />
+      )}
     </>
   );
 }
