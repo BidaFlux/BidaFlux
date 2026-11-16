@@ -153,6 +153,10 @@ export default function Sell() {
 
       <div className="card">
         <h2>4. Approve and create</h2>
+        <p className="small">
+          Two transactions, in this order. <b>Approve escrow</b> gives the escrow contract permission to take this one NFT from you;
+          nothing moves yet. <b>Create campaign</b> then moves the NFT into escrow and starts the auction with the settings above.
+        </p>
         <div className="row" style={{ alignItems: "flex-start" }}>
           <TxButton
             chainId={CANONICAL_CHAIN.id}
