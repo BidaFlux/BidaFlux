@@ -70,7 +70,7 @@ export default function CampaignPage() {
         </div>
       </div>
       <CampaignActions campaign={c} now={now} />
-      <BuyerPanel campaign={c} />
+      <BuyerPanel campaign={c} now={now} />
     </>
   );
 }

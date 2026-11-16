@@ -10,12 +10,12 @@ import type { Campaign } from "@/lib/campaign";
 import { deployment, TOKEN_DECIMALS } from "@/lib/config";
 import { fmtToken } from "@/lib/format";
 import { publicClientFor } from "@/lib/logs";
-import { bidSteps } from "@/lib/bidSteps";
+import { bidSteps, preflight } from "@/lib/bidSteps";
 import BidProgress from "./BidProgress";
 import MyIntents from "./MyIntents";
 import TxButton from "./TxButton";
 
-export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
+export default function BuyerPanel({ campaign, now }: { campaign: Campaign; now: bigint }) {
   const { address } = useAccount();
   const qc = useQueryClient();
   const [chainId, setChainId] = useState<number>(CANONICAL_CHAIN.id);
@@ -62,6 +62,18 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
     vaultBal: vaultBal.data ?? 0n,
     allowance: allowance.data ?? 0n,
   });
+  const check = preflight(
+    {
+      amount: parsed,
+      price: price.data ?? 0n,
+      walletBal: walletBal.data ?? 0n,
+      vaultBal: vaultBal.data ?? 0n,
+      allowance: allowance.data ?? 0n,
+      active,
+      secondsLeft: Number(campaign.expiry - now),
+    },
+    fmtToken,
+  );
 
   return (
     <>
@@ -107,7 +119,7 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
           <TxButton
             chainId={chainId}
             label="3. Deposit"
-            disabled={parsed === 0n || needsApproval}
+            disabled={parsed === 0n || needsApproval || Boolean(check.deposit)}
             request={() => ({ address: vault, abi: vaultAbi, functionName: "deposit", args: [parsed], chainId })}
             onDone={refresh}
           />
@@ -119,6 +131,7 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
             onDone={refresh}
           />
         </div>
+        {check.deposit && <p className="small err">{check.deposit}</p>}
       </div>
 
       <div className="card">
@@ -130,7 +143,7 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
         <TxButton
           chainId={chainId}
           label="4. Submit purchase intent"
-          disabled={!active || !enabledHere || (vaultBal.data ?? 0n) === 0n}
+          disabled={!active || !enabledHere || (vaultBal.data ?? 0n) === 0n || Boolean(check.submit)}
           request={async () => {
             // Read the price the escrow itself would compute now; it only falls afterwards, so locking it covers the intent.
             const price = await publicClientFor(CANONICAL_CHAIN.id).readContract({
@@ -144,6 +157,8 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
           onDone={refresh}
         />
         {!active && <p className="small">This campaign is no longer active.</p>}
+        {active && check.submit && <p className="small err">{check.submit}</p>}
+        {active && check.warning && <p className="small warn-text">{check.warning}</p>}
       </div>
 
       <MyIntents campaignId={campaign.id} />

@@ -43,3 +43,34 @@ export function bidSteps(i: BidInputs): Step[] {
     status: done[key] ? "done" : key === firstOpen ? "current" : "todo",
   }));
 }
+
+export interface PreflightInputs extends BidInputs {
+  active: boolean;
+  secondsLeft: number;
+}
+
+export interface Preflight {
+  /** Why Deposit would fail right now, if it would. */
+  deposit?: string;
+  /** Why Submit intent would fail right now, if it would. */
+  submit?: string;
+  /** A heads-up that does not block anything. */
+  warning?: string;
+}
+
+/** Plain-language reasons a step would fail, so the UI can stop the click before the wallet shows a raw revert. */
+export function preflight(i: PreflightInputs, fmt: (v: bigint) => string): Preflight {
+  const out: Preflight = {};
+  if (i.amount > 0n && i.walletBal < i.amount) {
+    out.deposit = `Your wallet has ${fmt(i.walletBal)} bUSD but you are depositing ${fmt(i.amount)}. Use "Get test bUSD" first.`;
+  }
+  if (i.price > 0n && i.vaultBal < i.price) {
+    out.submit = `Your vault holds ${fmt(i.vaultBal)} bUSD but the current price is ${fmt(i.price)}. Deposit at least ${fmt(i.price - i.vaultBal)} more.`;
+  }
+  if (i.active && i.secondsLeft <= 0) {
+    out.warning = "This auction has passed its end time, so a new intent will most likely be rejected.";
+  } else if (i.active && i.secondsLeft <= 60) {
+    out.warning = `Only ${i.secondsLeft}s left. After you submit, Reactive needs a few seconds to settle, so the auction may close first.`;
+  }
+  return out;
+}

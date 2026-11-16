@@ -61,3 +61,5 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .step.done .dot { background: var(--ok); border-color: var(--ok); color: var(--bg); }
 .step.current { color: var(--text); border-color: var(--accent); font-weight: 600; }
 .step.current .dot { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.warn-text { color: #b26a00; }
+@media (prefers-color-scheme: dark) { .warn-text { color: #f0b14a; } }
