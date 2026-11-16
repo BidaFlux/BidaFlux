@@ -1,6 +1,7 @@
 import { createPublicClient, getAbiItem, http, type Abi, type Address, type PublicClient } from "viem";
 import { chainById } from "./chains";
 import { deployment } from "./config";
+import { nextChunk } from "./rpcRange";
 
 const clients = new Map<number, PublicClient>();
 
@@ -24,42 +25,77 @@ export interface DecodedLog {
   args: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-const CHUNK = 9_000n; // public RPCs cap eth_getLogs ranges
-const MAX_CHUNKS = 400;
+const START_CHUNK = 9_000n;
+const MAX_WINDOWS = 5_000;
+
+/** Largest range each RPC has accepted so far, learned from its own error messages. */
+const learnedChunk = new Map<number, bigint>();
+
+interface Scan {
+  next: bigint;
+  logs: DecodedLog[];
+}
+const scans = new Map<string, Scan>();
+const queues = new Map<string, Promise<unknown>>();
 
 /**
- * Fetches an event's logs from `fromBlock` (the deployment block) to the chain head, in chunks.
- * Without a configured deployment block it only looks at the most recent chunk rather than guessing.
+ * Fetches an event's logs from the deployment block to the chain head, in windows sized to what the RPC accepts.
+ * Results are cached per query, so later calls only scan blocks added since the last one.
+ * Without a configured deployment block it only looks at the most recent window rather than guessing.
  */
-export async function getEventLogs(opts: {
+export function getEventLogs(opts: {
   chainId: number;
   address: Address;
   abi: Abi;
   eventName: string;
   args?: Record<string, unknown>;
 }): Promise<DecodedLog[]> {
+  const key = [opts.chainId, opts.address, opts.eventName, JSON.stringify(opts.args ?? {}, (_, v) => (typeof v === "bigint" ? v.toString() : v))].join(":");
+  // Calls with the same key run one after another so they never scan the same blocks twice.
+  const run = (queues.get(key) ?? Promise.resolve()).then(() => scan(key, opts));
+  queues.set(key, run.catch(() => undefined));
+  return run;
+}
+
+async function scan(
+  key: string,
+  opts: { chainId: number; address: Address; abi: Abi; eventName: string; args?: Record<string, unknown> },
+): Promise<DecodedLog[]> {
   const client = publicClientFor(opts.chainId);
   const event = getAbiItem({ abi: opts.abi, name: opts.eventName });
   if (!event || event.type !== "event") throw new Error(`No event ${opts.eventName}`);
 
   const head = await client.getBlockNumber();
-  let from = deployment.fromBlock[opts.chainId] ?? (head > CHUNK ? head - CHUNK : 0n);
-  const out: DecodedLog[] = [];
-  for (let i = 0; from <= head && i < MAX_CHUNKS; i++) {
-    const to = from + CHUNK - 1n > head ? head : from + CHUNK - 1n;
-    const logs = await client.getLogs({ address: opts.address, event, args: opts.args as never, fromBlock: from, toBlock: to });
-    for (const l of logs) {
-      out.push({
-        chainId: opts.chainId,
-        txHash: l.transactionHash,
-        blockNumber: l.blockNumber,
-        logIndex: l.logIndex,
-        args: (l as unknown as { args: Record<string, unknown> }).args,
-      });
+  const prior = scans.get(key);
+  let chunk = learnedChunk.get(opts.chainId) ?? START_CHUNK;
+  let from = prior?.next ?? deployment.fromBlock[opts.chainId] ?? (head > chunk ? head - chunk : 0n);
+  const found: DecodedLog[] = [];
+  for (let i = 0; from <= head; i++) {
+    if (i >= MAX_WINDOWS) throw new Error("Too many log windows; set a higher-limit RPC for this chain.");
+    const to = from + chunk - 1n > head ? head : from + chunk - 1n;
+    try {
+      const logs = await client.getLogs({ address: opts.address, event, args: opts.args as never, fromBlock: from, toBlock: to });
+      for (const l of logs) {
+        found.push({
+          chainId: opts.chainId,
+          txHash: l.transactionHash,
+          blockNumber: l.blockNumber,
+          logIndex: l.logIndex,
+          args: (l as unknown as { args: Record<string, unknown> }).args,
+        });
+      }
+      from = to + 1n;
+    } catch (e) {
+      const err = e as { message?: string; details?: string; shortMessage?: string };
+      const smaller = nextChunk(`${err.shortMessage ?? ""} ${err.details ?? ""} ${err.message ?? ""}`, chunk);
+      if (smaller === undefined) throw e;
+      chunk = smaller;
+      learnedChunk.set(opts.chainId, chunk);
     }
-    from = to + 1n;
   }
-  return out;
+  const all = [...(prior?.logs ?? []), ...found];
+  scans.set(key, { next: head + 1n, logs: all });
+  return [...all];
 }
 
 const blockTimes = new Map<string, bigint>();
