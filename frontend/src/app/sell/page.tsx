@@ -7,8 +7,10 @@ import { useAccount, useReadContract } from "wagmi";
 import { escrowAbi, nftAbi } from "@/abi";
 import NotDeployed from "@/components/NotDeployed";
 import TxButton from "@/components/TxButton";
+import TxLink from "@/components/TxLink";
 import { baseSepolia, buyerChains, CANONICAL_CHAIN } from "@/lib/chains";
 import { deployment, isDeployed, TOKEN_DECIMALS } from "@/lib/config";
+import { fmtDuration, fmtToken } from "@/lib/format";
 
 const toUnits = (v: string) => {
   try {
@@ -29,7 +31,17 @@ export default function Sell() {
   const [decrement, setDecrement] = useState("50");
   const [interval, setInterval] = useState("10");
   const [payouts, setPayouts] = useState<Record<number, string>>({});
-  const [created, setCreated] = useState<`0x${string}`>();
+  const [created, setCreated] = useState<{
+    id: `0x${string}`;
+    tx: `0x${string}`;
+    tokenId: string;
+    start: bigint;
+    reserve: bigint;
+    decrement: bigint;
+    interval: string;
+    duration: string;
+    chains: string[];
+  }>();
 
   // ownerOf reverts for a token that does not exist, which the query reports as an error: treat that as "not owned".
   const idReady = isAddress(nft) && tokenId !== "";
@@ -196,15 +208,41 @@ export default function Sell() {
             })}
             onDone={(r) => {
               const ev = parseEventLogs({ abi: escrowAbi, logs: r.logs, eventName: "CampaignCreated" })[0];
-              if (ev) setCreated(ev.args.campaignId);
+              if (ev)
+                setCreated({
+                  id: ev.args.campaignId,
+                  tx: r.transactionHash,
+                  tokenId,
+                  start,
+                  reserve,
+                  decrement: dec,
+                  interval,
+                  duration,
+                  chains: buyerChains.map((c) => c.name),
+                });
             }}
           />
         </div>
         {!ready && ownershipHint && <p className="small err">{ownershipHint}</p>}
         {created && (
-          <p className="ok">
-            Campaign created. <Link href={`/campaign/${created}`}>Open it →</Link>
-          </p>
+          <div className="card" style={{ marginTop: 16, marginBottom: 0 }}>
+            <h2 className="ok">Auction created</h2>
+            <p className="small">Your NFT is now held in the {CANONICAL_CHAIN.name} escrow and buyers can bid.</p>
+            <table>
+              <tbody>
+                <tr><th>NFT</th><td>#{created.tokenId}</td></tr>
+                <tr><th>Starts at</th><td>{fmtToken(created.start)} bUSD</td></tr>
+                <tr><th>Lowest price</th><td>{fmtToken(created.reserve)} bUSD (drops {fmtToken(created.decrement)} every {created.interval}s)</td></tr>
+                <tr><th>Runs for</th><td>{fmtDuration(Number(created.duration))}</td></tr>
+                <tr><th>Buyers from</th><td>{created.chains.join(", ")}</td></tr>
+                <tr><th>Transaction</th><td><TxLink chainId={CANONICAL_CHAIN.id} hash={created.tx} /></td></tr>
+              </tbody>
+            </table>
+            <p style={{ marginTop: 12 }}>
+              <Link href={`/campaign/${created.id}`}>View your auction →</Link>
+            </p>
+            <p className="small">To bid on an auction, switch to a different wallet account. Sellers can&apos;t bid on their own.</p>
+          </div>
         )}
       </div>
     </>
