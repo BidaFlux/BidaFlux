@@ -22,6 +22,7 @@ export default function Sell() {
   const { address } = useAccount();
   const [nft, setNft] = useState<string>(deployment.nft ?? "");
   const [tokenId, setTokenId] = useState("");
+  const [manualId, setManualId] = useState(false);
   const [duration, setDuration] = useState("300");
   const [startPrice, setStartPrice] = useState("1000");
   const [reservePrice, setReservePrice] = useState("500");
@@ -59,7 +60,17 @@ export default function Sell() {
         <label>NFT contract</label>
         <input value={nft} onChange={(e) => setNft(e.target.value)} placeholder="0x…" />
         <label>Token ID</label>
-        <input value={tokenId} onChange={(e) => setTokenId(e.target.value.replace(/\D/g, ""))} inputMode="numeric" />
+        <input
+          value={tokenId}
+          onChange={(e) => setTokenId(e.target.value.replace(/\D/g, ""))}
+          inputMode="numeric"
+          readOnly={!manualId}
+          placeholder={manualId ? "ID of an NFT you own" : "Filled in automatically when you mint"}
+        />
+        <label className="small">
+          <input type="checkbox" checked={manualId} onChange={(e) => setManualId(e.target.checked)} /> I already own an NFT,
+          let me enter its ID
+        </label>
         {deployment.nft && nft.toLowerCase() === deployment.nft.toLowerCase() && (
           <TxButton
             chainId={baseSepolia.id}
