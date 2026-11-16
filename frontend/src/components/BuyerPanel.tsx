@@ -75,6 +75,63 @@ export default function BuyerPanel({ campaign, now }: { campaign: Campaign; now:
     fmtToken,
   );
 
+  const blocked = payout.isSuccess && !enabledHere;
+  const actionButton = (key: "faucet" | "approve" | "deposit" | "withdraw", label: string) => {
+    switch (key) {
+      case "faucet":
+        return (
+          <TxButton
+            chainId={chainId}
+            label={label}
+            disabled={blocked || parsed === 0n || parsed > parseUnits("10000", TOKEN_DECIMALS)}
+            request={() => ({ address: token, abi: tokenAbi, functionName: "faucet", args: [parsed], chainId })}
+            onDone={refresh}
+          />
+        );
+      case "approve":
+        return (
+          <TxButton
+            chainId={chainId}
+            label={label}
+            disabled={blocked || parsed === 0n || !needsApproval}
+            request={() => ({ address: token, abi: tokenAbi, functionName: "approve", args: [vault, parsed], chainId })}
+            onDone={refresh}
+          />
+        );
+      case "deposit":
+        return (
+          <TxButton
+            chainId={chainId}
+            label={label}
+            disabled={blocked || parsed === 0n || needsApproval || Boolean(check.deposit)}
+            request={() => ({ address: vault, abi: vaultAbi, functionName: "deposit", args: [parsed], chainId })}
+            onDone={refresh}
+          />
+        );
+      case "withdraw":
+        return (
+          <TxButton
+            chainId={chainId}
+            label={label}
+            disabled={parsed === 0n || (vaultBal.data ?? 0n) < parsed}
+            request={() => ({ address: vault, abi: vaultAbi, functionName: "withdraw", args: [parsed], chainId })}
+            onDone={refresh}
+          />
+        );
+    }
+  };
+  const STEP_LABEL = { faucet: "Get test bUSD", approve: "Approve the vault", deposit: "Deposit into the vault" } as const;
+  const current = steps.find((st) => st.status === "current")?.key;
+  const primary = current === "faucet" || current === "approve" || current === "deposit" ? current : null;
+  const allButtons = (
+    <>
+      {actionButton("faucet", "1. Get test bUSD")}
+      {actionButton("approve", "2. Approve")}
+      {actionButton("deposit", "3. Deposit")}
+      {actionButton("withdraw", "Withdraw")}
+    </>
+  );
+
   return (
     <>
       <div className="card">
@@ -101,36 +158,27 @@ export default function BuyerPanel({ campaign, now }: { campaign: Campaign; now:
         <label>Amount (bUSD)</label>
         <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
 
-        <div className="row" style={{ alignItems: "flex-start" }}>
-          <TxButton
-            chainId={chainId}
-            label="1. Get test bUSD"
-            disabled={parsed === 0n || parsed > parseUnits("10000", TOKEN_DECIMALS)}
-            request={() => ({ address: token, abi: tokenAbi, functionName: "faucet", args: [parsed], chainId })}
-            onDone={refresh}
-          />
-          <TxButton
-            chainId={chainId}
-            label="2. Approve"
-            disabled={parsed === 0n || !needsApproval}
-            request={() => ({ address: token, abi: tokenAbi, functionName: "approve", args: [vault, parsed], chainId })}
-            onDone={refresh}
-          />
-          <TxButton
-            chainId={chainId}
-            label="3. Deposit"
-            disabled={parsed === 0n || needsApproval || Boolean(check.deposit)}
-            request={() => ({ address: vault, abi: vaultAbi, functionName: "deposit", args: [parsed], chainId })}
-            onDone={refresh}
-          />
-          <TxButton
-            chainId={chainId}
-            label="Withdraw"
-            disabled={parsed === 0n || (vaultBal.data ?? 0n) < parsed}
-            request={() => ({ address: vault, abi: vaultAbi, functionName: "withdraw", args: [parsed], chainId })}
-            onDone={refresh}
-          />
-        </div>
+        {address && active && (
+          <div style={{ margin: "12px 0" }}>
+            {primary ? (
+              <>
+                <p className="small">Next step</p>
+                {actionButton(primary, STEP_LABEL[primary])}
+              </>
+            ) : (
+              <p className="ok small">Your vault is funded. Submit your intent below.</p>
+            )}
+          </div>
+        )}
+
+        {address && active ? (
+          <details>
+            <summary className="small">All actions</summary>
+            <div className="row" style={{ alignItems: "flex-start" }}>{allButtons}</div>
+          </details>
+        ) : (
+          <div className="row" style={{ alignItems: "flex-start" }}>{allButtons}</div>
+        )}
         {check.deposit && <p className="small err">{check.deposit}</p>}
       </div>
 
