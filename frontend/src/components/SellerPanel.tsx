@@ -7,7 +7,7 @@ export default function SellerPanel({ campaign, now }: { campaign: Campaign; now
   const remaining = Number(campaign.expiry - now);
   return (
     <div className="card">
-      <h2>You are the seller</h2>
+      <h2>Your Auction</h2>
       {campaign.state === "Active" && <p>{remaining > 0 ? `Waiting for buyers. Ends in ${fmtDuration(remaining)}.` : "Auction ended."}</p>}
       {campaign.state === "Settled" && (
         <p className="ok">
