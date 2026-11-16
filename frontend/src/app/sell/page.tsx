@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { isAddress, parseEventLogs, parseUnits, type Address } from "viem";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { escrowAbi, nftAbi } from "@/abi";
 import NotDeployed from "@/components/NotDeployed";
 import TxButton from "@/components/TxButton";
@@ -31,6 +31,18 @@ export default function Sell() {
   const [payouts, setPayouts] = useState<Record<number, string>>({});
   const [created, setCreated] = useState<`0x${string}`>();
 
+  // ownerOf reverts for a token that does not exist, which the query reports as an error: treat that as "not owned".
+  const idReady = isAddress(nft) && tokenId !== "";
+  const owner = useReadContract({
+    address: isAddress(nft) ? nft : undefined,
+    abi: nftAbi,
+    functionName: "ownerOf",
+    args: [idReady ? BigInt(tokenId) : 0n],
+    chainId: baseSepolia.id,
+    query: { enabled: idReady, refetchInterval: 4000 },
+  });
+  const ownsToken = !!address && owner.data?.toLowerCase() === address.toLowerCase();
+
   if (!isDeployed) return <NotDeployed />;
 
   const payoutFor = (chainId: number) => payouts[chainId] ?? address ?? "";
@@ -46,6 +58,16 @@ export default function Sell() {
     start >= reserve &&
     dec > 0n &&
     buyerChains.every((c) => isAddress(payoutFor(c.id)));
+  const ready = valid && ownsToken;
+  const ownershipHint = !idReady
+    ? "Mint a demo NFT above (or enter the ID of one you own)."
+    : owner.isLoading
+      ? "Checking who owns this token…"
+      : owner.error
+        ? "This token does not exist yet. Mint one first."
+        : !ownsToken
+          ? "The connected wallet does not own this token."
+          : "";
 
   return (
     <>
@@ -135,7 +157,7 @@ export default function Sell() {
           <TxButton
             chainId={CANONICAL_CHAIN.id}
             label="Approve escrow"
-            disabled={!valid}
+            disabled={!ready}
             request={() => ({
               address: nft as Address,
               abi: nftAbi,
@@ -147,7 +169,7 @@ export default function Sell() {
           <TxButton
             chainId={CANONICAL_CHAIN.id}
             label="Create campaign"
-            disabled={!valid}
+            disabled={!ready}
             request={() => ({
               address: deployment.escrow!,
               abi: escrowAbi,
@@ -174,6 +196,7 @@ export default function Sell() {
             }}
           />
         </div>
+        {!ready && ownershipHint && <p className="small err">{ownershipHint}</p>}
         {created && (
           <p className="ok">
             Campaign created. <Link href={`/campaign/${created}`}>Open it →</Link>
