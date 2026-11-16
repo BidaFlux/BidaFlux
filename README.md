@@ -459,9 +459,9 @@ Copy `.env.example` to `.env` and fill it in. Never commit private keys, wallet 
 | Area | Status |
 |---|---|
 | Escrow, vaults, coordinator contracts | Implemented, unit and end-to-end tested locally |
-| Live Reactive loop on Lasna (callbacks on-chain) | Not yet deployed |
-| Deployed addresses and transaction hashes | Not yet available; will be added here and in `deployments/` |
-| Measured latency | Not yet measured |
+| Live Reactive loop on Lasna (callbacks on-chain) | Loop spike verified (Unichain Ping -> Lasna react -> Base Pong, about 2s); coordinator deployed on Lasna, full auction flow not yet run |
+| Deployed addresses and transaction hashes | See [deployments/spike.json](deployments/spike.json) and [deployments/full.json](deployments/full.json) |
+| Measured latency | Spike only: about 2s origin to callback (block timestamps, +/- 1s); auction flow not yet measured |
 | Frontend (auctions, buyer and seller flows, activity monitor) | Built and type-checked; not yet exercised against live contracts |
 
 ---
