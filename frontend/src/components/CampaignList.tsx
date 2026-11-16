@@ -37,25 +37,34 @@ export default function CampaignList() {
   if (error) return <p className="err">Could not load campaigns: {(error as Error).message}</p>;
   if (!data?.length) return <p className="small">No campaigns yet. Create one on the Sell page.</p>;
 
+  const live = (c: Campaign) => c.state === "Active" && c.expiry > now;
+  const inProgress = data.filter(live);
+  const ended = data.filter((c) => !live(c));
+
+  const card = (c: Campaign) => {
+    const remaining = Number(c.expiry - now);
+    return (
+      <Link key={c.id} href={`/campaign/${c.id}`} className="card" style={{ color: "inherit" }}>
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <strong>NFT #{c.tokenId.toString()}</strong>
+          <span className="pill">{c.state}</span>
+        </div>
+        <div className="big">{fmtToken(c.state === "Settled" ? c.price : priceAt(c, now))}</div>
+        <p className="small">
+          {c.state === "Settled" ? "Sold" : `Reserve ${fmtToken(c.reservePrice)}`} · seller {shortAddr(c.seller)}
+          <br />
+          {c.state === "Active" ? (remaining > 0 ? `${fmtDuration(remaining)} left` : "Expired, awaiting final intents or reclaim") : "Ended"}
+        </p>
+      </Link>
+    );
+  };
+
   return (
-    <div className="grid">
-      {data.map((c) => {
-        const remaining = Number(c.expiry - now);
-        return (
-          <Link key={c.id} href={`/campaign/${c.id}`} className="card" style={{ color: "inherit" }}>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <strong>NFT #{c.tokenId.toString()}</strong>
-              <span className="pill">{c.state}</span>
-            </div>
-            <div className="big">{fmtToken(priceAt(c, now))}</div>
-            <p className="small">
-              Reserve {fmtToken(c.reservePrice)} · seller {shortAddr(c.seller)}
-              <br />
-              {c.state === "Active" ? (remaining > 0 ? `${fmtDuration(remaining)} left` : "Expired, awaiting final intents or reclaim") : "Ended"}
-            </p>
-          </Link>
-        );
-      })}
-    </div>
+    <>
+      <h2>In progress</h2>
+      {inProgress.length ? <div className="grid">{inProgress.map(card)}</div> : <p className="small">No auctions running right now.</p>}
+      <h2 style={{ marginTop: 24 }}>Ended</h2>
+      {ended.length ? <div className="grid">{ended.map(card)}</div> : <p className="small">No ended auctions yet.</p>}
+    </>
   );
 }
