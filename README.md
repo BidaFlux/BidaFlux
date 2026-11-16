@@ -71,7 +71,7 @@ The NFT remains in canonical escrow on Base Sepolia throughout the auction.
 
 Reactive coordinates the purchase-intent workflow, while the canonical contract enforces winner finalization and settlement.
 
-**Important architectural distinction:** Reactive coordinates cross-chain events and callbacks. It does not automatically bridge NFTs or payment tokens. For the MVP, payment is secured on Base Sepolia, even when a buyer submits their purchase intent from Unichain Sepolia.
+**Important architectural distinction:** Reactive coordinates cross-chain events and callbacks. It does not bridge NFTs or payment tokens. Each chain has its own `PaymentVault`: a buyer deposits and locks funds on the chain they bid from, and the seller is paid on the chain where the winner paid. The NFT stays on Base Sepolia. See [docs/payment-flow.md](docs/payment-flow.md).
 
 ## How BidaFlux Works
 
@@ -318,11 +318,10 @@ The intended technology stack includes:
 | Reactive execution | Reactive Network / Reactive Lasna |
 | NFT standard | ERC-721 |
 | Payment standard | ERC-20 |
-| Frontend | To be finalized |
-| Wallet integration | To be finalized |
-| Development and testing | To be finalized |
+| Contracts framework | Foundry (Solidity 0.8.29, via-IR) |
+| Reactive library | [reactive-lib-omni](https://github.com/Reactive-Network/reactive-lib-omni) |
+| Frontend | Next.js, wagmi, viem (pnpm) |
 
-Specific framework and library choices may be updated as implementation progresses.
 
 ---
 
@@ -393,46 +392,25 @@ BidaFlux is an experimental hackathon project. It is not intended for production
 
 ## Project Structure
 
-The repository is expected to evolve toward the following organization:
+Current layout:
 
 ```text
 bidaflux/
-│
 ├── contracts/
 │   ├── src/
-│   │   ├── CanonicalAuctionEscrow.sol
-│   │   ├── PurchaseIntentAdapter.sol
-│   │   └── interfaces/
-│   ├── test/
-│   └── script/
-│
-├── reactive/
-│   ├── src/
-│   ├── test/
-│   └── README.md
-│
-├── frontend/
-│   ├── src/
-│   └── README.md
-│
-├── backend/
-│
-├── docs/
-│   ├── architecture.md
-│   ├── state-machine.md
-│   ├── event-schema.md
-│   ├── payment-flow.md
-│   └── demo-runbook.md
-│
-├── deployments/
-│   ├── base-sepolia.json
-│   ├── unichain-sepolia.json
-│   └── reactive-lasna.json
-│
+│   │   ├── AuctionEscrow.sol         # Base: NFT escrow, Dutch price, one-winner settlement
+│   │   ├── PaymentVault.sol          # per chain: buyer deposits, locks, payouts
+│   │   ├── ReactiveCoordinator.sol   # Lasna: relays intents and outcomes
+│   │   ├── MockToken.sol, DemoNFT.sol  # testnet only
+│   │   └── spike/                    # minimal Reactive loop used to prove callbacks on-chain
+│   ├── test/                         # unit and end-to-end tests
+│   └── script/                       # deploy scripts
+├── docs/                             # payment flow, state machine, event schema, runbook
 ├── .env.example
-├── README.md
 └── LICENSE
 ```
+
+`frontend/` is a Next.js app (wagmi, viem). Planned: `deployments/` (addresses and transaction hashes, added after deployment).
 
 ---
 
@@ -442,42 +420,49 @@ BidaFlux is under active development. Setup instructions will be expanded as the
 
 ### Prerequisites
 
-You will need:
-
 - Git
-- Node.js and npm
-- A Solidity development environment
-- A Web3 wallet
-- Base Sepolia testnet access
-- Unichain Sepolia testnet access
-- Reactive Network testnet access
+- [Foundry](https://book.getfoundry.sh/getting-started/installation)
+- For deployment: a throwaway wallet funded on Base Sepolia, Unichain Sepolia and Reactive Lasna (see [docs/demo-runbook.md](docs/demo-runbook.md))
 
-### Clone the repository
+### Build and test
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
-cd bidaflux
+git clone --recurse-submodules <YOUR_REPOSITORY_URL>
+cd bidaflux/contracts
+forge build
+forge test
 ```
 
-### Install dependencies
+The tests include an end-to-end test that feeds real event logs through the coordinator and delivers its callbacks to the real escrow and vaults. They run on a local chain with a mock of the Reactive system contract, so they do not replace the on-chain loop described below.
 
-Dependency installation commands will be documented once the project's development frameworks and package structure are finalized.
+### Frontend
+
+```bash
+cd frontend
+corepack pnpm@9.15.0 install
+cp .env.example .env.local   # fill in addresses after deployment
+corepack pnpm@9.15.0 dev
+```
+
+The UI reads only on-chain data. Until `.env.local` is filled in it shows a "not configured" notice, not sample data.
 
 ### Environment variables
 
-Create a local environment file based on `.env.example` when available.
-
-Never commit private keys, wallet seed phrases, or sensitive credentials.
+Copy `.env.example` to `.env` and fill it in. Never commit private keys, wallet seed phrases, or sensitive credentials.
 
 ---
 
 ## Development Status
 
-**Project status:** Under development.
+**Project status:** Under development (hackathon build, Nov 5 to Dec 5, 2026).
 
-The initial architecture and product requirements define the intended MVP. Contract interfaces, Reactive integration, frontend functionality, and deployment details will be documented as implementation progresses.
-
-Deployment addresses and transaction hashes will be added here once contracts are deployed and verified.
+| Area | Status |
+|---|---|
+| Escrow, vaults, coordinator contracts | Implemented, unit and end-to-end tested locally |
+| Live Reactive loop on Lasna (callbacks on-chain) | Not yet deployed |
+| Deployed addresses and transaction hashes | Not yet available; will be added here and in `deployments/` |
+| Measured latency | Not yet measured |
+| Frontend (auctions, buyer and seller flows, activity monitor) | Built and type-checked; not yet exercised against live contracts |
 
 ---
 
@@ -499,7 +484,7 @@ For significant changes, discuss the proposed approach with the project team bef
 
 ## License
 
-This project is intended to be open-source. The repository license should be specified in the `LICENSE` file.
+MIT. See [LICENSE](LICENSE).
 
 ---
 
