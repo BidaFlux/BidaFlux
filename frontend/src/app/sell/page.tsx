@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isAddress, parseEventLogs, parseUnits, type Address } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 import { escrowAbi, nftAbi } from "@/abi";
@@ -54,6 +54,11 @@ export default function Sell() {
     query: { enabled: idReady, refetchInterval: 4000 },
   });
   const ownsToken = !!address && owner.data?.toLowerCase() === address.toLowerCase();
+
+  const summaryRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (created) summaryRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [created]);
 
   if (!isDeployed) return <NotDeployed />;
 
@@ -225,9 +230,8 @@ export default function Sell() {
         </div>
         {!ready && ownershipHint && <p className="small err">{ownershipHint}</p>}
         {created && (
-          <div className="card" style={{ marginTop: 16, marginBottom: 0 }}>
+          <div ref={summaryRef} className="card" style={{ marginTop: 16, marginBottom: 0 }}>
             <h2 className="ok">Auction created</h2>
-            <p className="small">Your NFT is now held in the {CANONICAL_CHAIN.name} escrow and buyers can bid.</p>
             <table>
               <tbody>
                 <tr><th>NFT</th><td>#{created.tokenId}</td></tr>
@@ -241,7 +245,6 @@ export default function Sell() {
             <p style={{ marginTop: 12 }}>
               <Link href={`/campaign/${created.id}`}>View your auction →</Link>
             </p>
-            <p className="small">To bid on an auction, switch to a different wallet account. Sellers can&apos;t bid on their own.</p>
           </div>
         )}
       </div>
