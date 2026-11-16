@@ -54,3 +54,10 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 600; font-size: 12px; }
 @media (max-width: 600px) { main { padding-inline: 12px; } .big { font-size: 26px; } }
+.steps { display: flex; gap: 8px; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 12px; }
+.step { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px 3px 4px; }
+.step .dot { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); font-size: 12px; }
+.step.done { color: var(--ok); }
+.step.done .dot { background: var(--ok); border-color: var(--ok); color: var(--bg); }
+.step.current { color: var(--text); border-color: var(--accent); font-weight: 600; }
+.step.current .dot { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }

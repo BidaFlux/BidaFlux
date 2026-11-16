@@ -10,6 +10,8 @@ import type { Campaign } from "@/lib/campaign";
 import { deployment, TOKEN_DECIMALS } from "@/lib/config";
 import { fmtToken } from "@/lib/format";
 import { publicClientFor } from "@/lib/logs";
+import { bidSteps } from "@/lib/bidSteps";
+import BidProgress from "./BidProgress";
 import MyIntents from "./MyIntents";
 import TxButton from "./TxButton";
 
@@ -34,6 +36,16 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
     chainId: CANONICAL_CHAIN.id,
   });
 
+  // The price the escrow itself would charge right now; it only falls, so it is also what a new intent would lock.
+  const price = useReadContract({
+    address: deployment.escrow!,
+    abi: escrowAbi,
+    functionName: "currentPrice",
+    args: [campaign.id],
+    chainId: CANONICAL_CHAIN.id,
+    query: { enabled: campaign.state === "Active", refetchInterval: 4_000 },
+  });
+
   let parsed = 0n;
   try {
     parsed = parseUnits(amount || "0", TOKEN_DECIMALS);
@@ -43,11 +55,19 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
   const enabledHere = Boolean(payout.data && payout.data[0] !== zeroAddress);
   const active = campaign.state === "Active";
   const needsApproval = (allowance.data ?? 0n) < parsed;
+  const steps = bidSteps({
+    amount: parsed,
+    price: price.data ?? 0n,
+    walletBal: walletBal.data ?? 0n,
+    vaultBal: vaultBal.data ?? 0n,
+    allowance: allowance.data ?? 0n,
+  });
 
   return (
     <>
       <div className="card">
         <h2>Bid from</h2>
+        {address && active && <BidProgress steps={steps} />}
         <select value={chainId} onChange={(e) => setChainId(Number(e.target.value))}>
           {buyerChains.map((c) => (
             <option key={c.id} value={c.id}>
