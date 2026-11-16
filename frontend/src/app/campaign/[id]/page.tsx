@@ -72,11 +72,16 @@ export default function CampaignPage() {
           )}
         </div>
       </div>
-      <CampaignActions campaign={c} now={now} />
       {address?.toLowerCase() === c.seller.toLowerCase() ? (
-        <SellerPanel campaign={c} now={now} />
+        <>
+          <SellerPanel campaign={c} now={now} />
+          <CampaignActions campaign={c} now={now} />
+        </>
       ) : (
-        <BuyerPanel campaign={c} now={now} />
+        <>
+          <CampaignActions campaign={c} now={now} />
+          <BuyerPanel campaign={c} now={now} />
+        </>
       )}
     </>
   );
