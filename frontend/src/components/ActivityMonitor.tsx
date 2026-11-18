@@ -41,6 +41,10 @@ const FEED_LABEL: Record<FeedEvent["kind"], string> = {
   reclaimed: "NFT reclaimed",
   deposited: "bUSD deposited",
   withdrawn: "bUSD withdrawn",
+  minted: "NFT minted",
+  nftApproved: "NFT approved for escrow",
+  faucet: "Test bUSD claimed",
+  tokenApproved: "bUSD approved for vault",
 };
 
 /** Auction creations, reclaims and vault deposits/withdrawals: every transaction that is not an intent. */
@@ -54,9 +58,13 @@ function Feed({ events }: { events: FeedEvent[] }) {
     },
   });
   if (!events.length) return null;
+  // Block numbers are not comparable across chains, so order by timestamp once they are known.
+  const t = times.data;
+  const ordered = t ? [...events].sort((a, b) => Number((t[b.txHash] ?? 0n) - (t[a.txHash] ?? 0n))) : events;
   return (
     <div className="card scroll">
-      <h2>Auctions and vault activity</h2>
+      <h2>Other transactions</h2>
+      <p className="small">Mints, approvals, test-token claims, deposits, auction creations and reclaims.</p>
       <table>
         <thead>
           <tr>
@@ -68,7 +76,7 @@ function Feed({ events }: { events: FeedEvent[] }) {
           </tr>
         </thead>
         <tbody>
-          {events.map((e) => (
+          {ordered.map((e) => (
             <tr key={`${e.txHash}:${e.kind}:${e.blockNumber}`}>
               <td>{FEED_LABEL[e.kind]}</td>
               <td className="small">
@@ -78,7 +86,10 @@ function Feed({ events }: { events: FeedEvent[] }) {
                   </>
                 )}
                 {e.kind === "reclaimed" && e.campaignId && <Link href={`/campaign/${e.campaignId}`}>view auction →</Link>}
-                {(e.kind === "deposited" || e.kind === "withdrawn") && `${fmtToken(e.amount ?? 0n)} bUSD · ${shortAddr(e.account ?? "")}`}
+                {(e.kind === "deposited" || e.kind === "withdrawn" || e.kind === "faucet") && `${fmtToken(e.amount ?? 0n)} bUSD · ${shortAddr(e.account ?? "")}`}
+                {e.kind === "tokenApproved" && `${fmtToken(e.amount ?? 0n)} bUSD · ${shortAddr(e.account ?? "")} → ${shortAddr(e.spender ?? "")}`}
+                {e.kind === "minted" && `NFT #${e.tokenId?.toString()} · to ${shortAddr(e.account ?? "")}`}
+                {e.kind === "nftApproved" && `NFT #${e.tokenId?.toString()} · ${shortAddr(e.account ?? "")} → ${shortAddr(e.spender ?? "")}`}
               </td>
               <td>{chainById(e.chainId)?.name}</td>
               <td className="small">{times.data?.[e.txHash] !== undefined ? fmtTime(times.data[e.txHash]) : "…"}</td>

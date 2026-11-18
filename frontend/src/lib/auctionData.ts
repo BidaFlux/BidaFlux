@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { escrowAbi, vaultAbi } from "@/abi";
+import { zeroAddress } from "viem";
+import { escrowAbi, nftAbi, tokenAbi, vaultAbi } from "@/abi";
 import { readCampaign, type Campaign } from "./campaign";
 import { CANONICAL_CHAIN } from "./chains";
 import { deployment } from "./config";
@@ -10,7 +11,7 @@ import { getEventLogs } from "./logs";
 
 /** An auction or vault event that is not part of an intent's lifecycle. Shown on Activity so every transaction has a place. */
 export interface FeedEvent {
-  kind: "created" | "reclaimed" | "deposited" | "withdrawn";
+  kind: "created" | "reclaimed" | "deposited" | "withdrawn" | "minted" | "nftApproved" | "faucet" | "tokenApproved";
   chainId: number;
   txHash: `0x${string}`;
   blockNumber: bigint;
@@ -18,12 +19,14 @@ export interface FeedEvent {
   tokenId?: bigint;
   account?: `0x${string}`;
   amount?: bigint;
+  /** Approvals: who was approved. */
+  spender?: `0x${string}`;
   /** Only CampaignCreated carries its own timestamp (start); other events need their block's. */
   ts?: bigint;
 }
 
 export interface AuctionData {
-  /** Auction creations, reclaims and vault deposits/withdrawals, newest first. */
+  /** Everything the app's own contracts emitted that is not an intent: mints, approvals, faucet, deposits, creations, reclaims. */
   feed: FeedEvent[];
   /** Newest first. */
   campaigns: Campaign[];
@@ -42,19 +45,27 @@ export async function loadAuctionData(): Promise<AuctionData> {
   const canon = { chainId: CANONICAL_CHAIN.id, address: escrow, abi: escrowAbi };
   const vaultChains = Object.keys(deployment.vault).map(Number).filter((id) => deployment.vault[id]);
 
-  const [created, enabled, settled, rejected, reclaimed, perChain] = await Promise.all([
+  const nft = deployment.nft;
+  const [created, enabled, settled, rejected, reclaimed, nftMints, nftApprovals, perChain] = await Promise.all([
     getEventLogs({ ...canon, eventName: "CampaignCreated" }),
     getEventLogs({ ...canon, eventName: "ChainEnabled" }),
     getEventLogs({ ...canon, eventName: "Settled" }),
     getEventLogs({ ...canon, eventName: "IntentRejected" }),
     getEventLogs({ ...canon, eventName: "Reclaimed" }),
+    nft ? getEventLogs({ chainId: CANONICAL_CHAIN.id, address: nft, abi: nftAbi, eventName: "Transfer", args: { from: zeroAddress } }) : [],
+    nft ? getEventLogs({ chainId: CANONICAL_CHAIN.id, address: nft, abi: nftAbi, eventName: "Approval" }) : [],
     Promise.all(
       vaultChains.map(async (chainId) => {
         const v = { chainId, address: deployment.vault[chainId]!, abi: vaultAbi };
         const [submitted, paid, unlocked, deposited, withdrawn] = await Promise.all(
           (["IntentSubmitted", "SellerPaid", "IntentUnlocked", "Deposited", "Withdrawn"] as const).map((eventName) => getEventLogs({ ...v, eventName })),
         );
-        return { submitted, paid, unlocked, deposited, withdrawn };
+        const t = { chainId, address: deployment.token[chainId]!, abi: tokenAbi };
+        const [faucet, approvals] = await Promise.all([
+          getEventLogs({ ...t, eventName: "Transfer", args: { from: zeroAddress } }),
+          getEventLogs({ ...t, eventName: "Approval" }),
+        ]);
+        return { submitted, paid, unlocked, deposited, withdrawn, faucet, approvals };
       }),
     ),
   ]);
@@ -75,7 +86,11 @@ export async function loadAuctionData(): Promise<AuctionData> {
   const feed: FeedEvent[] = [
     ...created.map((l): FeedEvent => ({ ...base(l), kind: "created", campaignId: l.args.campaignId, tokenId: l.args.tokenId, account: l.args.seller, ts: l.args.start })),
     ...reclaimed.map((l): FeedEvent => ({ ...base(l), kind: "reclaimed", campaignId: l.args.campaignId })),
+    ...nftMints.map((l): FeedEvent => ({ ...base(l), kind: "minted", tokenId: l.args.tokenId, account: l.args.to })),
+    ...nftApprovals.map((l): FeedEvent => ({ ...base(l), kind: "nftApproved", tokenId: l.args.tokenId, account: l.args.owner, spender: l.args.approved })),
     ...perChain.flatMap((c) => [
+      ...c.faucet.map((l): FeedEvent => ({ ...base(l), kind: "faucet", account: l.args.to, amount: l.args.value })),
+      ...c.approvals.map((l): FeedEvent => ({ ...base(l), kind: "tokenApproved", account: l.args.owner, spender: l.args.spender, amount: l.args.value })),
       ...c.deposited.map((l): FeedEvent => ({ ...base(l), kind: "deposited", account: l.args.buyer, amount: l.args.amount })),
       ...c.withdrawn.map((l): FeedEvent => ({ ...base(l), kind: "withdrawn", account: l.args.buyer, amount: l.args.amount })),
     ]),
