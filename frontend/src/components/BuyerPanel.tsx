@@ -15,7 +15,8 @@ import BidProgress from "./BidProgress";
 import MyIntents from "./MyIntents";
 import TxButton from "./TxButton";
 
-export default function BuyerPanel({ campaign, now }: { campaign: Campaign; now: bigint }) {
+/** `processing` is how many other intents are awaiting the escrow decision; it only adds a warning, never disables a button. */
+export default function BuyerPanel({ campaign, now, processing = 0 }: { campaign: Campaign; now: bigint; processing?: number }) {
   const { address } = useAccount();
   const qc = useQueryClient();
   const [chainId, setChainId] = useState<number>(CANONICAL_CHAIN.id);
@@ -188,6 +189,11 @@ export default function BuyerPanel({ campaign, now }: { campaign: Campaign; now:
           Locks the current price from your vault balance. If you win you pay the price at the moment your intent was submitted and
           the remainder is returned.
         </p>
+        {processing > 0 && (
+          <div className="warnbox">
+            Another intent is pending. If it settles first, your locked bUSD is unlocked. If it is rejected, this auction stays open.
+          </div>
+        )}
         <TxButton
           chainId={chainId}
           label="4. Submit purchase intent"
