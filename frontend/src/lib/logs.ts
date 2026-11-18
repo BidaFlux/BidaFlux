@@ -1,4 +1,4 @@
-import { createPublicClient, getAbiItem, http, type Abi, type Address, type PublicClient } from "viem";
+import { createPublicClient, getAbiItem, http, parseEventLogs, type Abi, type Address, type PublicClient } from "viem";
 import { chainById } from "./chains";
 import { deployment } from "./config";
 import { isRateLimited, nextChunk } from "./rpcRange";
@@ -27,23 +27,19 @@ export interface DecodedLog {
 
 const START_CHUNK = 50_000n;
 const MAX_RETRIES = 6;
+const CONCURRENCY = 3;
 const MAX_WINDOWS = 5_000;
 
 /** Largest range each RPC has accepted so far, learned from its own error messages. */
 const learnedChunk = new Map<number, bigint>();
 
-interface Scan {
+interface Scan<T> {
   next: bigint;
-  logs: DecodedLog[];
+  items: T[];
 }
-const scans = new Map<string, Scan>();
+const scans = new Map<string, Scan<unknown>>();
 const queues = new Map<string, Promise<unknown>>();
 
-/**
- * Fetches an event's logs from the deployment block to the chain head, in windows sized to what the RPC accepts.
- * Results are cached per query, so later calls only scan blocks added since the last one.
- * Without a configured deployment block it only looks at the most recent window rather than guessing.
- */
 export interface LogQuery {
   chainId: number;
   address: Address;
@@ -52,35 +48,47 @@ export interface LogQuery {
   args?: Record<string, unknown>;
 }
 
-export function getEventLogs(opts: LogQuery): Promise<DecodedLog[]> {
-  const key = [opts.chainId, opts.address, opts.eventName, JSON.stringify(opts.args ?? {}, (_, v) => (typeof v === "bigint" ? v.toString() : v))].join(":");
-  // Calls with the same key run one after another so they never scan the same blocks twice.
-  const run = (queues.get(key) ?? Promise.resolve()).then(() => scan(key, opts));
+/** Runs scans that share a key one after another, so they never fetch the same blocks twice. */
+function queued<T>(key: string, job: () => Promise<T>): Promise<T> {
+  const run = (queues.get(key) ?? Promise.resolve()).then(job);
   queues.set(key, run.catch(() => undefined));
   return run;
 }
 
-async function scan(key: string, opts: LogQuery): Promise<DecodedLog[]> {
-  const client = publicClientFor(opts.chainId);
+type RawLog = Awaited<ReturnType<PublicClient["getLogs"]>>[number];
+
+/** Every log a contract has emitted since its deployment block. One scan per contract, however many events are read from it. */
+function contractLogs(chainId: number, address: Address): Promise<RawLog[]> {
+  const key = `contract:${chainId}:${address}`;
+  return queued(key, () =>
+    windowedScan<RawLog>(key, chainId, (from, to) => publicClientFor(chainId).getLogs({ address, fromBlock: from, toBlock: to }) as Promise<RawLog[]>),
+  );
+}
+
+/**
+ * One event's logs for a contract, from its deployment block to the chain head. The contract is scanned once, in windows sized
+ * to what the RPC accepts, and cached, so reading more events from it costs nothing and later calls only scan new blocks.
+ * Without a configured deployment block it only looks at the most recent window rather than guessing.
+ */
+export async function getEventLogs(opts: LogQuery): Promise<DecodedLog[]> {
   const event = getAbiItem({ abi: opts.abi, name: opts.eventName });
   if (!event || event.type !== "event") throw new Error(`No event ${opts.eventName}`);
-  return windowedScan(key, opts.chainId, async (from, to) => {
-    const logs = await client.getLogs({ address: opts.address, event, args: opts.args as never, fromBlock: from, toBlock: to });
-    return logs.map((l) => ({
-      chainId: opts.chainId,
-      txHash: l.transactionHash,
-      blockNumber: l.blockNumber,
-      logIndex: l.logIndex,
-      args: (l as unknown as { args: Record<string, unknown> }).args,
-    }));
-  });
+  const raw = await contractLogs(opts.chainId, opts.address);
+  const parsed = parseEventLogs({ abi: opts.abi, eventName: opts.eventName as never, args: opts.args as never, logs: raw as never, strict: false });
+  return (parsed as unknown as { transactionHash: `0x${string}`; blockNumber: bigint; logIndex: number; args: Record<string, unknown> }[]).map((l) => ({
+    chainId: opts.chainId,
+    txHash: l.transactionHash,
+    blockNumber: l.blockNumber,
+    logIndex: l.logIndex,
+    args: l.args,
+  }));
 }
 
 /** Raw topic query (for events that are not in any ABI we ship). `args` holds `topics` and `data` as hex. */
 export function getRawLogs(opts: { chainId: number; address: Address; topics: (string | string[] | null)[] }): Promise<DecodedLog[]> {
   const key = ["raw", opts.chainId, opts.address, JSON.stringify(opts.topics)].join(":");
-  const run = (queues.get(key) ?? Promise.resolve()).then(() =>
-    windowedScan(key, opts.chainId, async (from, to) => {
+  return queued(key, () =>
+    windowedScan<DecodedLog>(key, opts.chainId, async (from, to) => {
       const logs = (await publicClientFor(opts.chainId).request({
         method: "eth_getLogs",
         params: [{ address: opts.address, topics: opts.topics as never, fromBlock: `0x${from.toString(16)}`, toBlock: `0x${to.toString(16)}` }],
@@ -94,43 +102,42 @@ export function getRawLogs(opts: { chainId: number; address: Address; topics: (s
       }));
     }),
   );
-  queues.set(key, run.catch(() => undefined));
-  return run;
 }
 
-async function windowedScan(key: string, chainId: number, fetchWindow: (from: bigint, to: bigint) => Promise<DecodedLog[]>): Promise<DecodedLog[]> {
+async function windowedScan<T>(key: string, chainId: number, fetchWindow: (from: bigint, to: bigint) => Promise<T[]>): Promise<T[]> {
   const client = publicClientFor(chainId);
-  const opts = { chainId };
-
   const head = await client.getBlockNumber();
-  const prior = scans.get(key);
-  let chunk = learnedChunk.get(opts.chainId) ?? START_CHUNK;
-  let from = prior?.next ?? deployment.fromBlock[opts.chainId] ?? (head > chunk ? head - chunk : 0n);
-  const found: DecodedLog[] = [];
+  const prior = scans.get(key) as Scan<T> | undefined;
+  let chunk = learnedChunk.get(chainId) ?? START_CHUNK;
+  let from = prior?.next ?? deployment.fromBlock[chainId] ?? (head > chunk ? head - chunk : 0n);
+  const found: T[] = [];
   let retries = 0;
-  for (let i = 0; from <= head; i++) {
+  // Windows are independent, so a few are fetched at once; the results are only kept when the whole batch succeeds.
+  for (let i = 0; from <= head; i += CONCURRENCY) {
     if (i >= MAX_WINDOWS) throw new Error("Too many log windows; set a higher-limit RPC for this chain.");
-    const to = from + chunk - 1n > head ? head : from + chunk - 1n;
+    const windows: [bigint, bigint][] = [];
+    for (let f = from; f <= head && windows.length < CONCURRENCY; f += chunk) windows.push([f, f + chunk - 1n > head ? head : f + chunk - 1n]);
     try {
-      found.push(...(await fetchWindow(from, to)));
-      from = to + 1n;
+      const batch = await Promise.all(windows.map(([a, b]) => fetchWindow(a, b)));
+      for (const items of batch) found.push(...items);
+      from = windows[windows.length - 1][1] + 1n;
       retries = 0;
     } catch (e) {
       const err = e as { message?: string; details?: string; shortMessage?: string };
       const text = `${err.shortMessage ?? ""} ${err.details ?? ""} ${err.message ?? ""}`;
       if (isRateLimited(text) && retries < MAX_RETRIES) {
-        // Back off and retry the same window: 0.5s, 1s, 2s, ...
+        // Back off and retry the same windows: 0.5s, 1s, 2s, ...
         await new Promise((r) => setTimeout(r, 500 * 2 ** retries++));
         continue;
       }
       const smaller = nextChunk(text, chunk);
       if (smaller === undefined) throw e;
       chunk = smaller;
-      learnedChunk.set(opts.chainId, chunk);
+      learnedChunk.set(chainId, chunk);
     }
   }
-  const all = [...(prior?.logs ?? []), ...found];
-  scans.set(key, { next: head + 1n, logs: all });
+  const all = [...(prior?.items ?? []), ...found];
+  scans.set(key, { next: head + 1n, items: all });
   return [...all];
 }
 
