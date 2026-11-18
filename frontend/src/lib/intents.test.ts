@@ -49,3 +49,20 @@ test("settlement summary separates seller payout from loser unlocks", () => {
   assert.deepEqual(s.losers, { total: 2, unlocked: 1, pending: 1 });
   assert.equal(settlementSummary(r, "none").winner, undefined);
 });
+
+import { reactiveFor } from "./intents.js";
+
+test("links an intent to its own Lasna transactions only", () => {
+  const [won, lost] = groupIntents({
+    submitted: [sub("a", "c", 1n), sub("b", "c", 2n)],
+    settled: [log({ intentId: "a", price: 9n })],
+    rejected: [log({ intentId: "b", reason: 1 })],
+    paid: [],
+    unlocked: [],
+  });
+  const tx = (kind: "settle" | "finalize" | "release", intentId: string, destChainId: number, n: number) => ({ kind, intentId, destChainId, txHash: `0x${n}` as `0x${string}`, blockNumber: BigInt(n) });
+  const txs = [tx("settle", "a", 84532, 1), tx("finalize", "a", 1, 2), tx("finalize", "a", 99, 3), tx("settle", "b", 84532, 4), tx("release", "b", 1, 5)];
+  assert.deepEqual([reactiveFor(won, txs).hop1?.txHash, reactiveFor(won, txs).hop2?.txHash], ["0x1", "0x2"]);
+  assert.deepEqual([reactiveFor(lost, txs).hop1?.txHash, reactiveFor(lost, txs).hop2?.txHash], ["0x4", "0x5"]);
+  assert.equal(reactiveFor(won, []).hop1, undefined);
+});

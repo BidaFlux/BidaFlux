@@ -90,3 +90,28 @@ export function settlementSummary(intents: Intent[] = [], winnerIntent: string):
     },
   };
 }
+
+export interface ReactiveLike {
+  txHash: `0x${string}`;
+  blockNumber: bigint;
+  destChainId: number;
+  kind: "settle" | "finalize" | "release";
+  intentId: string;
+}
+export type ReactiveLink = Pick<ReactiveLike, "txHash" | "blockNumber">;
+
+/**
+ * The Lasna transactions that carried this intent's two callbacks, if they exist yet.
+ * hop 1: settle (intent to escrow). hop 2: finalize on the winner's chain (seller payout) or release (loser unlock).
+ */
+export function reactiveFor(intent: Intent, txs: ReactiveLike[]): { hop1?: ReactiveLink; hop2?: ReactiveLink } {
+  const first = (f: (t: ReactiveLike) => boolean) => txs.filter(f).sort((a, b) => Number(a.blockNumber - b.blockNumber))[0];
+  const hop1 = first((t) => t.kind === "settle" && t.intentId === intent.intentId);
+  const hop2 =
+    intent.decision?.kind === "settled"
+      ? first((t) => t.kind === "finalize" && t.intentId === intent.intentId && t.destChainId === intent.source.chainId)
+      : intent.decision
+        ? first((t) => t.kind === "release" && t.intentId === intent.intentId)
+        : undefined;
+  return { hop1, hop2 };
+}
