@@ -44,13 +44,15 @@ const queues = new Map<string, Promise<unknown>>();
  * Results are cached per query, so later calls only scan blocks added since the last one.
  * Without a configured deployment block it only looks at the most recent window rather than guessing.
  */
-export function getEventLogs(opts: {
+export interface LogQuery {
   chainId: number;
   address: Address;
   abi: Abi;
   eventName: string;
   args?: Record<string, unknown>;
-}): Promise<DecodedLog[]> {
+}
+
+export function getEventLogs(opts: LogQuery): Promise<DecodedLog[]> {
   const key = [opts.chainId, opts.address, opts.eventName, JSON.stringify(opts.args ?? {}, (_, v) => (typeof v === "bigint" ? v.toString() : v))].join(":");
   // Calls with the same key run one after another so they never scan the same blocks twice.
   const run = (queues.get(key) ?? Promise.resolve()).then(() => scan(key, opts));
@@ -58,13 +60,47 @@ export function getEventLogs(opts: {
   return run;
 }
 
-async function scan(
-  key: string,
-  opts: { chainId: number; address: Address; abi: Abi; eventName: string; args?: Record<string, unknown> },
-): Promise<DecodedLog[]> {
+async function scan(key: string, opts: LogQuery): Promise<DecodedLog[]> {
   const client = publicClientFor(opts.chainId);
   const event = getAbiItem({ abi: opts.abi, name: opts.eventName });
   if (!event || event.type !== "event") throw new Error(`No event ${opts.eventName}`);
+  return windowedScan(key, opts.chainId, async (from, to) => {
+    const logs = await client.getLogs({ address: opts.address, event, args: opts.args as never, fromBlock: from, toBlock: to });
+    return logs.map((l) => ({
+      chainId: opts.chainId,
+      txHash: l.transactionHash,
+      blockNumber: l.blockNumber,
+      logIndex: l.logIndex,
+      args: (l as unknown as { args: Record<string, unknown> }).args,
+    }));
+  });
+}
+
+/** Raw topic query (for events that are not in any ABI we ship). `args` holds `topics` and `data` as hex. */
+export function getRawLogs(opts: { chainId: number; address: Address; topics: (string | string[] | null)[] }): Promise<DecodedLog[]> {
+  const key = ["raw", opts.chainId, opts.address, JSON.stringify(opts.topics)].join(":");
+  const run = (queues.get(key) ?? Promise.resolve()).then(() =>
+    windowedScan(key, opts.chainId, async (from, to) => {
+      const logs = (await publicClientFor(opts.chainId).request({
+        method: "eth_getLogs",
+        params: [{ address: opts.address, topics: opts.topics as never, fromBlock: `0x${from.toString(16)}`, toBlock: `0x${to.toString(16)}` }],
+      })) as { transactionHash: `0x${string}`; blockNumber: `0x${string}`; logIndex: `0x${string}`; topics: string[]; data: string }[];
+      return logs.map((l) => ({
+        chainId: opts.chainId,
+        txHash: l.transactionHash,
+        blockNumber: BigInt(l.blockNumber),
+        logIndex: Number(l.logIndex),
+        args: { topics: l.topics, data: l.data },
+      }));
+    }),
+  );
+  queues.set(key, run.catch(() => undefined));
+  return run;
+}
+
+async function windowedScan(key: string, chainId: number, fetchWindow: (from: bigint, to: bigint) => Promise<DecodedLog[]>): Promise<DecodedLog[]> {
+  const client = publicClientFor(chainId);
+  const opts = { chainId };
 
   const head = await client.getBlockNumber();
   const prior = scans.get(key);
@@ -76,16 +112,7 @@ async function scan(
     if (i >= MAX_WINDOWS) throw new Error("Too many log windows; set a higher-limit RPC for this chain.");
     const to = from + chunk - 1n > head ? head : from + chunk - 1n;
     try {
-      const logs = await client.getLogs({ address: opts.address, event, args: opts.args as never, fromBlock: from, toBlock: to });
-      for (const l of logs) {
-        found.push({
-          chainId: opts.chainId,
-          txHash: l.transactionHash,
-          blockNumber: l.blockNumber,
-          logIndex: l.logIndex,
-          args: (l as unknown as { args: Record<string, unknown> }).args,
-        });
-      }
+      found.push(...(await fetchWindow(from, to)));
       from = to + 1n;
       retries = 0;
     } catch (e) {
