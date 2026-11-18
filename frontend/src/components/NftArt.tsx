@@ -8,27 +8,28 @@ import { CANONICAL_CHAIN } from "@/lib/chains";
 import { publicClientFor } from "@/lib/logs";
 import { gradientFor, parseDataJson, resolveUri } from "@/lib/nftArt";
 
-async function fetchImage(nft: Address, tokenId: bigint): Promise<string | undefined> {
+/** Resolves to null (not undefined: React Query rejects undefined) when the NFT has no usable image. */
+async function fetchImage(nft: Address, tokenId: bigint): Promise<string | null> {
   const raw = await publicClientFor(CANONICAL_CHAIN.id).readContract({ address: nft, abi: nftAbi, functionName: "tokenURI", args: [tokenId] });
   const uri = resolveUri(raw);
-  if (!uri) return undefined;
+  if (!uri) return null;
   let meta: Record<string, unknown> | undefined;
   if (uri.startsWith("data:")) meta = parseDataJson(uri);
   else {
     const res = await fetch(uri);
-    if (!res.ok) return undefined;
+    if (!res.ok) return null;
     const type = res.headers.get("content-type") ?? "";
     if (type.startsWith("image/")) return uri;
     meta = await res.json();
   }
-  return typeof meta?.image === "string" ? resolveUri(meta.image) : undefined;
+  return (typeof meta?.image === "string" && resolveUri(meta.image)) || null;
 }
 
 /** The NFT's own image when tokenURI gives one; otherwise a gradient from the token id, labelled "NFT #id". */
 export default function NftArt({ nft, tokenId, children, className = "" }: { nft: Address; tokenId: bigint; children?: ReactNode; className?: string }) {
   const { data: image } = useQuery({
     queryKey: ["nft-image", nft, tokenId.toString()],
-    queryFn: () => fetchImage(nft, tokenId).catch(() => undefined),
+    queryFn: () => fetchImage(nft, tokenId).catch(() => null),
     staleTime: Infinity,
     retry: false,
   });
