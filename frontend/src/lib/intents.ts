@@ -68,3 +68,25 @@ export function oldestPendingAge(intents: Intent[] = [], now: bigint): number | 
   const p = pendingOf(intents);
   return p.length ? Number(now - p.reduce((a, b) => (a.intentTs < b.intentTs ? a : b)).intentTs) : undefined;
 }
+
+export interface SettlementSummary {
+  winner?: Intent;
+  /** SellerPaid seen on the winner's vault. */
+  sellerPaid: boolean;
+  losers: { total: number; unlocked: number; pending: number };
+}
+
+/** Seller payout and loser unlocks are reported separately: each has its own on-chain event. */
+export function settlementSummary(intents: Intent[] = [], winnerIntent: string): SettlementSummary {
+  const winner = intents.find((i) => i.intentId === winnerIntent);
+  const others = intents.filter((i) => i.intentId !== winnerIntent);
+  return {
+    winner,
+    sellerPaid: winner?.vault?.kind === "paid",
+    losers: {
+      total: others.length,
+      unlocked: others.filter((i) => i.vault?.kind === "unlocked").length,
+      pending: others.filter((i) => !i.decision).length,
+    },
+  };
+}

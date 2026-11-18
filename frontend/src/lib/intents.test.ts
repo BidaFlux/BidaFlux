@@ -33,3 +33,19 @@ test("groups by campaign and finds the oldest pending age", () => {
   assert.equal(oldestPendingAge(g.get("c1"), 400n), 300);
   assert.equal(oldestPendingAge(undefined, 400n), undefined);
 });
+
+import { settlementSummary } from "./intents.js";
+
+test("settlement summary separates seller payout from loser unlocks", () => {
+  const r = groupIntents({
+    submitted: [sub("w", "c", 1n), sub("l1", "c", 2n), sub("l2", "c", 3n)],
+    settled: [log({ intentId: "w", price: 9n })],
+    rejected: [log({ intentId: "l1", reason: 1 })],
+    paid: [log({ intentId: "w" })],
+    unlocked: [log({ intentId: "l1" })],
+  });
+  const s = settlementSummary(r, "w");
+  assert.equal(s.sellerPaid, true);
+  assert.deepEqual(s.losers, { total: 2, unlocked: 1, pending: 1 });
+  assert.equal(settlementSummary(r, "none").winner, undefined);
+});
