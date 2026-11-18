@@ -15,7 +15,6 @@ import TxLink from "@/components/TxLink";
 import { baseSepolia, buyerChains, CANONICAL_CHAIN } from "@/lib/chains";
 import { deployment, isDeployed, TOKEN_DECIMALS } from "@/lib/config";
 import { fmtDuration, fmtToken, shortAddr } from "@/lib/format";
-import { priceAt, reserveReachedAt } from "@/lib/price";
 import { gradientFor } from "@/lib/nftArt";
 
 const STEPS = ["NFT", "Price curve", "Payouts", "Approve and create"] as const;
@@ -101,8 +100,6 @@ export default function Sell() {
 
   const ctaHint = !ready && ownershipHint ? ownershipHint : "";
   const shownSteps = [0, 1, 2, 3];
-  const sampleTimes = [0, 1, 2, 3].map((k) => k * Number(interval || 0)).filter((t) => t <= Number(duration));
-  const reachAt = previewCurve ? reserveReachedAt(previewCurve) : 0;
 
   return (
     <>
@@ -318,27 +315,9 @@ export default function Sell() {
             Reserve {fmtToken(reserve)} bUSD · {fmtDuration(Number(duration) || 0)} duration
           </p>
           {previewCurve ? (
-            <>
-              <table>
-                <tbody>
-                  {sampleTimes.map((t) => (
-                    <tr key={t}>
-                      <td>{t}s</td>
-                      <td>{fmtToken(priceAt(previewCurve, BigInt(t)))} bUSD</td>
-                    </tr>
-                  ))}
-                  {reachAt < Number(duration) && (
-                    <tr>
-                      <td>{reachAt}s</td>
-                      <td>{fmtToken(reserve)} bUSD (reserve)</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              <PriceCurve curve={previewCurve} duration={Number(duration)} now={0n} showNow={false} />
-            </>
+            <PriceCurve curve={previewCurve} duration={Number(duration)} now={0n} showNow={false} />
           ) : (
-            <p className="small">Enter a valid price curve to see the schedule.</p>
+            <p className="small">Enter a valid price curve to see the curve.</p>
           )}
           <div className="strip strip-active">
             <b>Custody and settlement</b>
