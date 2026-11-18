@@ -123,3 +123,22 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .step.done .dot { background: var(--ok); border-color: var(--ok); color: var(--bg); }
 .step.current { color: var(--text); border-color: var(--blue); font-weight: 700; }
 .step.current .dot { background: var(--btn); border-color: var(--blue); color: #fff; }
+
+/* NFT art */
+.art { position: relative; display: flex; align-items: flex-end; height: 150px; border-radius: 12px; padding: 10px; }
+.art-label { font-weight: 800; font-size: 22px; color: #ffffffe6; text-shadow: 0 1px 6px #0006; }
+.art .badge { position: absolute; top: 10px; right: 10px; }
+
+/* auctions page */
+.hero { margin-bottom: 20px; }
+.stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin: 16px 0; }
+.stat { margin: 0; }
+.stat b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 13px; }
+.filters { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0; align-items: center; }
+.filters .search { flex: 1; min-width: 200px; }
+.filters select { width: auto; }
+.cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.cards .card { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.cards .card .price { margin-top: 8px; }
+.cards .card .row { margin-top: auto; padding-top: 8px; }
