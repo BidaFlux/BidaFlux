@@ -17,8 +17,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={manrope.variable}>
       <body>
         <Providers>
+          <a className="skip" href="#main">Skip to content</a>
           <Nav />
-          <main>{children}</main>
+          <main id="main">{children}</main>
         </Providers>
       </body>
     </html>

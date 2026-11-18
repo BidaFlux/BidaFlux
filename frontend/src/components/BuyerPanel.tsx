@@ -12,6 +12,7 @@ import { fmtToken } from "@/lib/format";
 import { publicClientFor } from "@/lib/logs";
 import { bidSteps, preflight } from "@/lib/bidSteps";
 import BidProgress from "./BidProgress";
+import Field from "./Field";
 import MyIntents from "./MyIntents";
 import TxButton from "./TxButton";
 
@@ -138,7 +139,7 @@ export default function BuyerPanel({ campaign, now, processing = 0 }: { campaign
       <div className="card">
         <h2>Bid from</h2>
         {address && active && <BidProgress steps={steps} />}
-        <select value={chainId} onChange={(e) => setChainId(Number(e.target.value))}>
+        <select aria-label="Bid from chain" value={chainId} onChange={(e) => setChainId(Number(e.target.value))}>
           {buyerChains.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -156,8 +157,9 @@ export default function BuyerPanel({ campaign, now, processing = 0 }: { campaign
           you bid from; the seller is paid on that chain only if you win.
         </p>
 
-        <label>Amount (bUSD)</label>
-        <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
+        <Field label="Amount (bUSD)">
+          {(id) => <input id={id} value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />}
+        </Field>
 
         {address && active && (
           <div style={{ margin: "12px 0" }}>

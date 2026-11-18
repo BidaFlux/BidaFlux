@@ -7,6 +7,7 @@ import { useAccount, useReadContract } from "wagmi";
 import { escrowAbi, nftAbi } from "@/abi";
 import { ChainChips } from "@/components/ChainChip";
 import NftArt from "@/components/NftArt";
+import Field from "@/components/Field";
 import NotDeployed from "@/components/NotDeployed";
 import Price from "@/components/Price";
 import PriceCurve from "@/components/PriceCurve";
@@ -109,35 +110,36 @@ export default function Sell() {
         enabled chain compete for it.
       </p>
 
-      <div className="wizard" role="tablist" aria-label="Steps">
+      <nav className="wizard" aria-label="Steps">
         {shownSteps.map((n) => (
           <button
             key={n}
-            role="tab"
-            aria-selected={n === step}
+            aria-current={n === step ? "step" : undefined}
             className={`wstep ${n === step ? "on" : ""} ${n < step ? "done" : ""}`}
             onClick={() => (n <= step || [isAddress(nft) && ownsToken, priceOk, payoutsOk].slice(0, n).every(Boolean)) && setStep(n)}
           >
             {n + 1}. {STEPS[n]}
           </button>
         ))}
-      </div>
+      </nav>
 
       <div className="detail stretch">
         <div className="card wizard-card" style={{ margin: 0 }}>
           {step === 0 && (
             <div>
               <h2>NFT details</h2>
-              <label>NFT contract</label>
-              <input value={nft} onChange={(e) => setNft(e.target.value)} placeholder="0x…" />
-              <label>Token ID</label>
-              <input
+              <Field label="NFT contract">
+                {(id) => <input id={id} value={nft} onChange={(e) => setNft(e.target.value)} placeholder="0x…" />}
+              </Field>
+              <Field label="Token ID">
+                {(id) => <input id={id}
                 value={tokenId}
                 onChange={(e) => setTokenId(e.target.value.replace(/\D/g, ""))}
                 inputMode="numeric"
                 readOnly={!manualId}
                 placeholder={manualId ? "ID of an NFT you own" : "Filled in automatically when you mint"}
-              />
+              />}
+              </Field>
               <label className="small">
                 <input type="checkbox" checked={manualId} onChange={(e) => setManualId(e.target.checked)} /> I already own an NFT,
                 let me enter its ID
@@ -162,24 +164,29 @@ export default function Sell() {
               <h2>Price curve (bUSD)</h2>
               <div className="grid">
                 <div>
-                  <label>Start price</label>
-                  <input value={startPrice} onChange={(e) => setStartPrice(e.target.value)} inputMode="decimal" />
+                  <Field label="Start price">
+                    {(id) => <input id={id} value={startPrice} onChange={(e) => setStartPrice(e.target.value)} inputMode="decimal" />}
+                  </Field>
                 </div>
                 <div>
-                  <label>Reserve price</label>
-                  <input value={reservePrice} onChange={(e) => setReservePrice(e.target.value)} inputMode="decimal" />
+                  <Field label="Reserve price">
+                    {(id) => <input id={id} value={reservePrice} onChange={(e) => setReservePrice(e.target.value)} inputMode="decimal" />}
+                  </Field>
                 </div>
                 <div>
-                  <label>Drops by</label>
-                  <input value={decrement} onChange={(e) => setDecrement(e.target.value)} inputMode="decimal" />
+                  <Field label="Drops by">
+                    {(id) => <input id={id} value={decrement} onChange={(e) => setDecrement(e.target.value)} inputMode="decimal" />}
+                  </Field>
                 </div>
                 <div>
-                  <label>Every (seconds)</label>
-                  <input value={interval} onChange={(e) => setInterval(e.target.value.replace(/\D/g, ""))} inputMode="numeric" />
+                  <Field label="Every (seconds)">
+                    {(id) => <input id={id} value={interval} onChange={(e) => setInterval(e.target.value.replace(/\D/g, ""))} inputMode="numeric" />}
+                  </Field>
                 </div>
                 <div>
-                  <label>Duration (seconds)</label>
-                  <input value={duration} onChange={(e) => setDuration(e.target.value.replace(/\D/g, ""))} inputMode="numeric" />
+                  <Field label="Duration (seconds)">
+                    {(id) => <input id={id} value={duration} onChange={(e) => setDuration(e.target.value.replace(/\D/g, ""))} inputMode="numeric" />}
+                  </Field>
                 </div>
               </div>
               {start < reserve && <p className="err small">Start price must be at least the reserve price.</p>}
@@ -196,8 +203,9 @@ export default function Sell() {
               </p>
               {buyerChains.map((c) => (
                 <div key={c.id}>
-                  <label>Payout address on {c.name}</label>
-                  <input value={payoutFor(c.id)} onChange={(e) => setPayouts({ ...payouts, [c.id]: e.target.value })} placeholder="0x…" />
+                  <Field label={<>Payout address on {c.name}</>}>
+                    {(id) => <input id={id} value={payoutFor(c.id)} onChange={(e) => setPayouts({ ...payouts, [c.id]: e.target.value })} placeholder="0x…" />}
+                  </Field>
                   {payoutFor(c.id) && !isAddress(payoutFor(c.id)) && <p className="small err">Not a valid address.</p>}
                 </div>
               ))}
