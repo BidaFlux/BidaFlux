@@ -10,5 +10,5 @@
     "plugins": [],
     "types": ["node"]
   },
-  "include": ["src/lib/price.ts", "src/lib/price.test.ts", "src/lib/bidSteps.ts", "src/lib/bidSteps.test.ts", "src/lib/rpcRange.ts", "src/lib/rpcRange.test.ts"]
+  "include": ["src/lib/price.ts", "src/lib/price.test.ts", "src/lib/bidSteps.ts", "src/lib/bidSteps.test.ts", "src/lib/rpcRange.ts", "src/lib/rpcRange.test.ts", "src/lib/status.ts", "src/lib/status.test.ts"]
 }
