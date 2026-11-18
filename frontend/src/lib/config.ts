@@ -23,7 +23,7 @@ export const deployment = {
   } as Record<number, bigint | undefined>,
   rpc: {
     [baseSepolia.id]: process.env.NEXT_PUBLIC_BASE_RPC || "https://base-sepolia-rpc.publicnode.com",
-    [unichainSepolia.id]: process.env.NEXT_PUBLIC_UNI_RPC || "https://sepolia.unichain.org",
+    [unichainSepolia.id]: process.env.NEXT_PUBLIC_UNI_RPC || "https://unichain-sepolia-rpc.publicnode.com",
   } as Record<number, string>,
 };
 

@@ -1,7 +1,7 @@
 import { createPublicClient, getAbiItem, http, type Abi, type Address, type PublicClient } from "viem";
 import { chainById } from "./chains";
 import { deployment } from "./config";
-import { nextChunk } from "./rpcRange";
+import { isRateLimited, nextChunk } from "./rpcRange";
 
 const clients = new Map<number, PublicClient>();
 
@@ -25,7 +25,8 @@ export interface DecodedLog {
   args: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-const START_CHUNK = 9_000n;
+const START_CHUNK = 50_000n;
+const MAX_RETRIES = 6;
 const MAX_WINDOWS = 5_000;
 
 /** Largest range each RPC has accepted so far, learned from its own error messages. */
@@ -70,6 +71,7 @@ async function scan(
   let chunk = learnedChunk.get(opts.chainId) ?? START_CHUNK;
   let from = prior?.next ?? deployment.fromBlock[opts.chainId] ?? (head > chunk ? head - chunk : 0n);
   const found: DecodedLog[] = [];
+  let retries = 0;
   for (let i = 0; from <= head; i++) {
     if (i >= MAX_WINDOWS) throw new Error("Too many log windows; set a higher-limit RPC for this chain.");
     const to = from + chunk - 1n > head ? head : from + chunk - 1n;
@@ -85,9 +87,16 @@ async function scan(
         });
       }
       from = to + 1n;
+      retries = 0;
     } catch (e) {
       const err = e as { message?: string; details?: string; shortMessage?: string };
-      const smaller = nextChunk(`${err.shortMessage ?? ""} ${err.details ?? ""} ${err.message ?? ""}`, chunk);
+      const text = `${err.shortMessage ?? ""} ${err.details ?? ""} ${err.message ?? ""}`;
+      if (isRateLimited(text) && retries < MAX_RETRIES) {
+        // Back off and retry the same window: 0.5s, 1s, 2s, ...
+        await new Promise((r) => setTimeout(r, 500 * 2 ** retries++));
+        continue;
+      }
+      const smaller = nextChunk(text, chunk);
       if (smaller === undefined) throw e;
       chunk = smaller;
       learnedChunk.set(opts.chainId, chunk);

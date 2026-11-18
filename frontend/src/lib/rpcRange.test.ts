@@ -18,3 +18,12 @@ test("gives up on unrelated errors and on ranges that cannot shrink", () => {
   assert.equal(nextChunk("connection refused", 9000n), undefined);
   assert.equal(nextChunk("limit exceeded", 150n), undefined);
 });
+
+import { isRateLimited } from "./rpcRange.js";
+
+test("rate-limit errors are retried, never treated as a range problem", () => {
+  const msg = "RPC Request failed. Status: 429 Your IP has exceeded its request rate limit.";
+  assert.equal(isRateLimited(msg), true);
+  assert.equal(nextChunk(msg, 9000n), undefined);
+  assert.equal(isRateLimited("exceed maximum block range: 50000"), false);
+});
