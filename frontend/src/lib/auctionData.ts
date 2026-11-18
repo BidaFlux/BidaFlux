@@ -8,7 +8,23 @@ import { deployment } from "./config";
 import { groupByCampaign, groupIntents, type Intent } from "./intents";
 import { getEventLogs } from "./logs";
 
+/** An auction or vault event that is not part of an intent's lifecycle. Shown on Activity so every transaction has a place. */
+export interface FeedEvent {
+  kind: "created" | "reclaimed" | "deposited" | "withdrawn";
+  chainId: number;
+  txHash: `0x${string}`;
+  blockNumber: bigint;
+  campaignId?: `0x${string}`;
+  tokenId?: bigint;
+  account?: `0x${string}`;
+  amount?: bigint;
+  /** Only CampaignCreated carries its own timestamp (start); other events need their block's. */
+  ts?: bigint;
+}
+
 export interface AuctionData {
+  /** Auction creations, reclaims and vault deposits/withdrawals, newest first. */
+  feed: FeedEvent[];
   /** Newest first. */
   campaigns: Campaign[];
   /** Chains each campaign accepts bids from, from its ChainEnabled events. */
@@ -26,18 +42,19 @@ export async function loadAuctionData(): Promise<AuctionData> {
   const canon = { chainId: CANONICAL_CHAIN.id, address: escrow, abi: escrowAbi };
   const vaultChains = Object.keys(deployment.vault).map(Number).filter((id) => deployment.vault[id]);
 
-  const [created, enabled, settled, rejected, perChain] = await Promise.all([
+  const [created, enabled, settled, rejected, reclaimed, perChain] = await Promise.all([
     getEventLogs({ ...canon, eventName: "CampaignCreated" }),
     getEventLogs({ ...canon, eventName: "ChainEnabled" }),
     getEventLogs({ ...canon, eventName: "Settled" }),
     getEventLogs({ ...canon, eventName: "IntentRejected" }),
+    getEventLogs({ ...canon, eventName: "Reclaimed" }),
     Promise.all(
       vaultChains.map(async (chainId) => {
         const v = { chainId, address: deployment.vault[chainId]!, abi: vaultAbi };
-        const [submitted, paid, unlocked] = await Promise.all(
-          (["IntentSubmitted", "SellerPaid", "IntentUnlocked"] as const).map((eventName) => getEventLogs({ ...v, eventName })),
+        const [submitted, paid, unlocked, deposited, withdrawn] = await Promise.all(
+          (["IntentSubmitted", "SellerPaid", "IntentUnlocked", "Deposited", "Withdrawn"] as const).map((eventName) => getEventLogs({ ...v, eventName })),
         );
-        return { submitted, paid, unlocked };
+        return { submitted, paid, unlocked, deposited, withdrawn };
       }),
     ),
   ]);
@@ -54,8 +71,17 @@ export async function loadAuctionData(): Promise<AuctionData> {
     paid: perChain.flatMap((c) => c.paid),
     unlocked: perChain.flatMap((c) => c.unlocked),
   });
+  const base = (l: { chainId: number; txHash: `0x${string}`; blockNumber: bigint }) => ({ chainId: l.chainId, txHash: l.txHash, blockNumber: l.blockNumber });
+  const feed: FeedEvent[] = [
+    ...created.map((l): FeedEvent => ({ ...base(l), kind: "created", campaignId: l.args.campaignId, tokenId: l.args.tokenId, account: l.args.seller, ts: l.args.start })),
+    ...reclaimed.map((l): FeedEvent => ({ ...base(l), kind: "reclaimed", campaignId: l.args.campaignId })),
+    ...perChain.flatMap((c) => [
+      ...c.deposited.map((l): FeedEvent => ({ ...base(l), kind: "deposited", account: l.args.buyer, amount: l.args.amount })),
+      ...c.withdrawn.map((l): FeedEvent => ({ ...base(l), kind: "withdrawn", account: l.args.buyer, amount: l.args.amount })),
+    ]),
+  ].sort((a, b) => (a.ts !== undefined && b.ts !== undefined ? Number(b.ts - a.ts) : Number(b.blockNumber - a.blockNumber)));
   const campaigns = await Promise.all(created.map((l) => readCampaign(l.args.campaignId as `0x${string}`)));
-  return { campaigns: campaigns.reverse(), enabledChains, intents, intentsByCampaign: groupByCampaign(intents) };
+  return { feed, campaigns: campaigns.reverse(), enabledChains, intents, intentsByCampaign: groupByCampaign(intents) };
 }
 
 /** Shared by Auctions, Campaign and Activity so they all read the same cache entry. */

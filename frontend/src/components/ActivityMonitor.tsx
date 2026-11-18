@@ -4,11 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { buildActivity, REJECT_REASONS, type ActivityRow, type Step } from "@/lib/activity";
-import { useAuctionData } from "@/lib/auctionData";
+import { useAuctionData, type FeedEvent } from "@/lib/auctionData";
 import { addressUrl, CANONICAL_CHAIN, chainById, lasna } from "@/lib/chains";
 import { deployment } from "@/lib/config";
 import { fmtTime, fmtToken, shortAddr } from "@/lib/format";
 import { fmtLatency, summarize } from "@/lib/latency";
+import { blockTimestamp } from "@/lib/logs";
 import { loadReactiveTxs } from "@/lib/reactiveTxs";
 import { pendingLabel } from "@/lib/status";
 import { useNow } from "@/lib/useNow";
@@ -35,6 +36,63 @@ function StepCell({ step, label }: { step?: Step; label: string }) {
   );
 }
 
+const FEED_LABEL: Record<FeedEvent["kind"], string> = {
+  created: "Auction created",
+  reclaimed: "NFT reclaimed",
+  deposited: "bUSD deposited",
+  withdrawn: "bUSD withdrawn",
+};
+
+/** Auction creations, reclaims and vault deposits/withdrawals: every transaction that is not an intent. */
+function Feed({ events }: { events: FeedEvent[] }) {
+  const times = useQuery({
+    queryKey: ["feed-times", events.length],
+    queryFn: async () => {
+      const m: Record<string, bigint> = {};
+      await Promise.all(events.map(async (e) => (m[e.txHash] = e.ts ?? (await blockTimestamp(e.chainId, e.blockNumber)))));
+      return m;
+    },
+  });
+  if (!events.length) return null;
+  return (
+    <div className="card scroll">
+      <h2>Auctions and vault activity</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>Details</th>
+            <th>Chain</th>
+            <th>When</th>
+            <th>Tx</th>
+          </tr>
+        </thead>
+        <tbody>
+          {events.map((e) => (
+            <tr key={`${e.txHash}:${e.kind}:${e.blockNumber}`}>
+              <td>{FEED_LABEL[e.kind]}</td>
+              <td className="small">
+                {e.kind === "created" && e.campaignId && (
+                  <>
+                    NFT #{e.tokenId?.toString()} by {shortAddr(e.account ?? "")} · <Link href={`/campaign/${e.campaignId}`}>view auction →</Link>
+                  </>
+                )}
+                {e.kind === "reclaimed" && e.campaignId && <Link href={`/campaign/${e.campaignId}`}>view auction →</Link>}
+                {(e.kind === "deposited" || e.kind === "withdrawn") && `${fmtToken(e.amount ?? 0n)} bUSD · ${shortAddr(e.account ?? "")}`}
+              </td>
+              <td>{chainById(e.chainId)?.name}</td>
+              <td className="small">{times.data?.[e.txHash] !== undefined ? fmtTime(times.data[e.txHash]) : "…"}</td>
+              <td>
+                <TxLink chainId={e.chainId} hash={e.txHash} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function ActivityMonitor() {
   const now = useNow();
   const [filter, setFilter] = useState<Filter>("All");
@@ -53,9 +111,12 @@ export default function ActivityMonitor() {
   const all = rows.data ?? [];
   if (!all.length)
     return (
-      <Empty title="No intents yet">
-        <p className="small">Nothing has been submitted to this deployment. Intents appear here as soon as a buyer submits one.</p>
-      </Empty>
+      <>
+        <Empty title="No purchase intents yet">
+          <p className="small">Intents and their Reactive hops appear here as soon as a buyer submits one. Other transactions are listed below.</p>
+        </Empty>
+        <Feed events={d?.feed ?? []} />
+      </>
     );
 
   const shown = all.filter((r) => filter === "All" || kindOf(r) === filter);
@@ -165,6 +226,8 @@ export default function ActivityMonitor() {
         </table>
         {!shown.length && <p className="small">No {filter.toLowerCase()} intents.</p>}
       </div>
+
+      <Feed events={d?.feed ?? []} />
     </>
   );
 }
