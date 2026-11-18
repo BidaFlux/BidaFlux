@@ -123,10 +123,10 @@ export default function Sell() {
         ))}
       </div>
 
-      <div className="detail">
-        <div>
+      <div className="detail stretch">
+        <div className="card wizard-card" style={{ margin: 0 }}>
           {step === 0 && (
-            <div className="card">
+            <div>
               <h2>NFT details</h2>
               <label>NFT contract</label>
               <input value={nft} onChange={(e) => setNft(e.target.value)} placeholder="0x…" />
@@ -158,7 +158,7 @@ export default function Sell() {
           )}
 
           {step === 1 && (
-            <div className="card">
+            <div>
               <h2>Price curve (bUSD)</h2>
               <div className="grid">
                 <div>
@@ -188,7 +188,7 @@ export default function Sell() {
           )}
 
           {step === 2 && (
-            <div className="card">
+            <div>
               <h2>Where you get paid</h2>
               <p className="small">
                 You are paid on the chain the winner bid from, in that chain&apos;s bUSD. Use an address you control on each chain. Plain
@@ -205,7 +205,7 @@ export default function Sell() {
           )}
 
           {step === 3 && (
-            <div className="card">
+            <div>
               <h2>Approve and create</h2>
               <p className="small">
                 Two transactions, in this order. <b>Approve escrow</b> gives the escrow contract permission to take this one NFT from you;
@@ -287,7 +287,7 @@ export default function Sell() {
             </div>
           )}
 
-          <div className="row" style={{ marginTop: 4 }}>
+          <div className="row wizard-nav">
             <button className="btn ghost" disabled={step === 0} onClick={() => setStep(step - 1)}>
               Back
             </button>
@@ -299,7 +299,7 @@ export default function Sell() {
           </div>
         </div>
 
-        <aside className="card preview" aria-label="Auction preview" style={{ margin: 0 }}>
+        <aside className="card" aria-label="Auction preview" style={{ margin: 0 }}>
           <h2>Auction preview</h2>
           {isAddress(nft) && tokenId !== "" ? (
             <NftArt nft={nft} tokenId={BigInt(tokenId)} />
