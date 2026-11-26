@@ -10,5 +10,5 @@
     "plugins": [],
     "types": ["node"]
   },
-  "include": ["src/lib/price.ts", "src/lib/price.test.ts"]
+  "include": ["src/lib/price.ts", "src/lib/price.test.ts", "src/lib/bidSteps.ts", "src/lib/bidSteps.test.ts", "src/lib/rpcRange.ts", "src/lib/rpcRange.test.ts", "src/lib/status.ts", "src/lib/status.test.ts", "src/lib/intents.ts", "src/lib/intents.test.ts", "src/lib/nftArt.ts", "src/lib/nftArt.test.ts", "src/lib/reactiveTxs.ts", "src/lib/reactiveTxs.test.ts", "src/lib/latency.ts", "src/lib/latency.test.ts", "src/lib/logs.ts", "src/lib/chains.ts", "src/lib/config.ts"]
 }

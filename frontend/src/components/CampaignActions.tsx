@@ -30,11 +30,7 @@ export default function CampaignActions({ campaign, now }: { campaign: Campaign;
             request={() => ({ address: deployment.escrow!, abi: escrowAbi, functionName: "reclaim", args: [campaign.id], chainId: CANONICAL_CHAIN.id })}
             onDone={refresh}
           />
-          {!reclaimable && (
-            <p className="small">
-              Available {GRACE_SECONDS}s after expiry, so an intent already in flight can still settle first.
-            </p>
-          )}
+          {!reclaimable && <p className="small">Available {GRACE_SECONDS}s after expiry.</p>}
         </>
       )}
       {settled && (
@@ -45,10 +41,7 @@ export default function CampaignActions({ campaign, now }: { campaign: Campaign;
             request={() => ({ address: deployment.escrow!, abi: escrowAbi, functionName: "replaySettlement", args: [campaign.id], chainId: CANONICAL_CHAIN.id })}
             onDone={refresh}
           />
-          <p className="small">
-            Recovery step: if the seller payout or loser unlocks never arrive, this re-emits the settlement event so Reactive relays it
-            again. It changes no state.
-          </p>
+          <p className="small">Use if the payout or unlocks never arrive.</p>
         </>
       )}
     </div>

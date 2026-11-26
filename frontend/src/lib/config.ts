@@ -1,5 +1,5 @@
 import type { Address } from "viem";
-import { baseSepolia, unichainSepolia } from "./chains";
+import { baseSepolia, lasna, unichainSepolia } from "./chains";
 
 const addr = (v: string | undefined) => (v && /^0x[0-9a-fA-F]{40}$/.test(v) ? (v as Address) : undefined);
 const block = (v: string | undefined) => (v && /^\d+$/.test(v) ? BigInt(v) : undefined);
@@ -20,10 +20,11 @@ export const deployment = {
   fromBlock: {
     [baseSepolia.id]: block(process.env.NEXT_PUBLIC_BASE_FROM_BLOCK),
     [unichainSepolia.id]: block(process.env.NEXT_PUBLIC_UNI_FROM_BLOCK),
+    [lasna.id]: block(process.env.NEXT_PUBLIC_LASNA_FROM_BLOCK),
   } as Record<number, bigint | undefined>,
   rpc: {
-    [baseSepolia.id]: process.env.NEXT_PUBLIC_BASE_RPC || "https://sepolia.base.org",
-    [unichainSepolia.id]: process.env.NEXT_PUBLIC_UNI_RPC || "https://sepolia.unichain.org",
+    [baseSepolia.id]: process.env.NEXT_PUBLIC_BASE_RPC || "https://base-sepolia-rpc.publicnode.com",
+    [unichainSepolia.id]: process.env.NEXT_PUBLIC_UNI_RPC || "https://unichain-sepolia-rpc.publicnode.com",
   } as Record<number, string>,
 };
 

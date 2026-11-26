@@ -1,0 +1,21 @@
+{
+  "description": "Loop spike: Unichain Sepolia Ping -> Lasna react() -> Base Sepolia pong()",
+  "deployer": "0x55C7B549885F66b6d8b1713A7C17C3FF2B0E0986",
+  "note": "SpikeOrigin (Unichain) and SpikeReactive (Lasna) share an address because both were the deployer's nonce-0 CREATE on different chains.",
+  "contracts": {
+    "SpikeOrigin":   { "chain": "unichain_sepolia", "chainId": 1301,    "address": "0xD41f654C55fAa4De1B111718D28FA0792cBBc723", "deployTx": "0xdebb17dfc685f4b8a407e707f0bfbdad9a3a65cea9a3beb6907673e05e2b437f", "block": 67980238 },
+    "SpikeCallback": { "chain": "base_sepolia",     "chainId": 84532,   "address": "0x5c5C8665abd4812f7a61703D9e5A3697a5cd846c", "deployTx": "0x62b8105fc0e53ee33622155617d3e4fddbd5f34b23be2921466067b72acab95f", "block": 59554585, "callbackProxy": "0x476F44b11F5C942c58f4c8E3d0300E5710743585", "fundedWei": "1000000000000000" },
+    "SpikeReactive": { "chain": "lasna",            "chainId": 5318007, "address": "0xD41f654C55fAa4De1B111718D28FA0792cBBc723", "deployTx": "0xfdd45a40a89b0b766c7286f4bbc52044c9a0c5338b9f874a4f59e1f6faa3609b", "block": 8490061,  "fundedWei": "200000000000000000" }
+  },
+  "loop": {
+    "originPing":    { "chain": "unichain_sepolia", "tx": "0x445c827d7bf62813744f87370a64e3de1a1d76547ceb3d284567cf3f775d18d6", "block": 67980460, "timestamp": 1794832888 },
+    "reactiveTx":    { "chain": "lasna",            "tx": "0x60cf9ead656ed224f0ff8e8c6343b9c570983e1129ae085f59a02c1080efdf74", "block": 8490096,  "timestamp": 1794832888 },
+    "callbackPong":  { "chain": "base_sepolia",     "tx": "0xdce8cc5e0f4c81f65dc94ddbe09948e3181c03102aed7395d9edd06be267368e", "block": 59555106, "timestamp": 1794832890, "event": "Pong(id=1, srcChainId=1301, originTs=1794832888, callbackTs=1794832890)" }
+  },
+  "latencySeconds": {
+    "originToReactive": 0,
+    "reactiveToCallback": 2,
+    "originToCallback": 2,
+    "resolution": "block timestamps are whole seconds, so each figure is +/- 1s"
+  }
+}

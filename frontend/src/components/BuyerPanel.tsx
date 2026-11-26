@@ -10,10 +10,14 @@ import type { Campaign } from "@/lib/campaign";
 import { deployment, TOKEN_DECIMALS } from "@/lib/config";
 import { fmtToken } from "@/lib/format";
 import { publicClientFor } from "@/lib/logs";
+import { bidSteps, preflight } from "@/lib/bidSteps";
+import BidProgress from "./BidProgress";
+import Field from "./Field";
 import MyIntents from "./MyIntents";
 import TxButton from "./TxButton";
 
-export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
+/** `processing` is how many other intents are awaiting the escrow decision; it only adds a warning, never disables a button. */
+export default function BuyerPanel({ campaign, now, processing = 0 }: { campaign: Campaign; now: bigint; processing?: number }) {
   const { address } = useAccount();
   const qc = useQueryClient();
   const [chainId, setChainId] = useState<number>(CANONICAL_CHAIN.id);
@@ -34,6 +38,16 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
     chainId: CANONICAL_CHAIN.id,
   });
 
+  // The price the escrow itself would charge right now; it only falls, so it is also what a new intent would lock.
+  const price = useReadContract({
+    address: deployment.escrow!,
+    abi: escrowAbi,
+    functionName: "currentPrice",
+    args: [campaign.id],
+    chainId: CANONICAL_CHAIN.id,
+    query: { enabled: campaign.state === "Active", refetchInterval: 4_000 },
+  });
+
   let parsed = 0n;
   try {
     parsed = parseUnits(amount || "0", TOKEN_DECIMALS);
@@ -43,12 +57,89 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
   const enabledHere = Boolean(payout.data && payout.data[0] !== zeroAddress);
   const active = campaign.state === "Active";
   const needsApproval = (allowance.data ?? 0n) < parsed;
+  const steps = bidSteps({
+    amount: parsed,
+    price: price.data ?? 0n,
+    walletBal: walletBal.data ?? 0n,
+    vaultBal: vaultBal.data ?? 0n,
+    allowance: allowance.data ?? 0n,
+  });
+  const check = preflight(
+    {
+      amount: parsed,
+      price: price.data ?? 0n,
+      walletBal: walletBal.data ?? 0n,
+      vaultBal: vaultBal.data ?? 0n,
+      allowance: allowance.data ?? 0n,
+      active,
+      secondsLeft: Number(campaign.expiry - now),
+    },
+    fmtToken,
+  );
+
+  const blocked = payout.isSuccess && !enabledHere;
+  const actionButton = (key: "faucet" | "approve" | "deposit" | "withdraw", label: string) => {
+    switch (key) {
+      case "faucet":
+        return (
+          <TxButton
+            chainId={chainId}
+            label={label}
+            disabled={blocked || parsed === 0n || parsed > parseUnits("10000", TOKEN_DECIMALS)}
+            request={() => ({ address: token, abi: tokenAbi, functionName: "faucet", args: [parsed], chainId })}
+            onDone={refresh}
+          />
+        );
+      case "approve":
+        return (
+          <TxButton
+            chainId={chainId}
+            label={label}
+            disabled={blocked || parsed === 0n || !needsApproval}
+            request={() => ({ address: token, abi: tokenAbi, functionName: "approve", args: [vault, parsed], chainId })}
+            onDone={refresh}
+          />
+        );
+      case "deposit":
+        return (
+          <TxButton
+            chainId={chainId}
+            label={label}
+            disabled={blocked || parsed === 0n || needsApproval || Boolean(check.deposit)}
+            request={() => ({ address: vault, abi: vaultAbi, functionName: "deposit", args: [parsed], chainId })}
+            onDone={refresh}
+          />
+        );
+      case "withdraw":
+        return (
+          <TxButton
+            chainId={chainId}
+            label={label}
+            disabled={parsed === 0n || (vaultBal.data ?? 0n) < parsed}
+            request={() => ({ address: vault, abi: vaultAbi, functionName: "withdraw", args: [parsed], chainId })}
+            onDone={refresh}
+          />
+        );
+    }
+  };
+  const STEP_LABEL = { faucet: "Get test bUSD", approve: "Approve the vault", deposit: "Deposit into the vault" } as const;
+  const current = steps.find((st) => st.status === "current")?.key;
+  const primary = current === "faucet" || current === "approve" || current === "deposit" ? current : null;
+  const allButtons = (
+    <>
+      {actionButton("faucet", "1. Get test bUSD")}
+      {actionButton("approve", "2. Approve")}
+      {actionButton("deposit", "3. Deposit")}
+      {actionButton("withdraw", "Withdraw")}
+    </>
+  );
 
   return (
     <>
       <div className="card">
         <h2>Bid from</h2>
-        <select value={chainId} onChange={(e) => setChainId(Number(e.target.value))}>
+        {address && active && <BidProgress steps={steps} />}
+        <select aria-label="Bid from chain" value={chainId} onChange={(e) => setChainId(Number(e.target.value))}>
           {buyerChains.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -66,39 +157,32 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
           you bid from; the seller is paid on that chain only if you win.
         </p>
 
-        <label>Amount (bUSD)</label>
-        <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
+        <Field label="Amount (bUSD)">
+          {(id) => <input id={id} value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />}
+        </Field>
 
-        <div className="row" style={{ alignItems: "flex-start" }}>
-          <TxButton
-            chainId={chainId}
-            label="1. Get test bUSD"
-            disabled={parsed === 0n || parsed > parseUnits("10000", TOKEN_DECIMALS)}
-            request={() => ({ address: token, abi: tokenAbi, functionName: "faucet", args: [parsed], chainId })}
-            onDone={refresh}
-          />
-          <TxButton
-            chainId={chainId}
-            label="2. Approve"
-            disabled={parsed === 0n || !needsApproval}
-            request={() => ({ address: token, abi: tokenAbi, functionName: "approve", args: [vault, parsed], chainId })}
-            onDone={refresh}
-          />
-          <TxButton
-            chainId={chainId}
-            label="3. Deposit"
-            disabled={parsed === 0n || needsApproval}
-            request={() => ({ address: vault, abi: vaultAbi, functionName: "deposit", args: [parsed], chainId })}
-            onDone={refresh}
-          />
-          <TxButton
-            chainId={chainId}
-            label="Withdraw"
-            disabled={parsed === 0n || (vaultBal.data ?? 0n) < parsed}
-            request={() => ({ address: vault, abi: vaultAbi, functionName: "withdraw", args: [parsed], chainId })}
-            onDone={refresh}
-          />
-        </div>
+        {address && active && (
+          <div style={{ margin: "12px 0" }}>
+            {primary ? (
+              <>
+                <p className="small">Next step</p>
+                {actionButton(primary, STEP_LABEL[primary])}
+              </>
+            ) : (
+              <p className="ok small">Your vault is funded. Submit your intent below.</p>
+            )}
+          </div>
+        )}
+
+        {address && active ? (
+          <details>
+            <summary className="small">All actions</summary>
+            <div className="row" style={{ alignItems: "flex-start" }}>{allButtons}</div>
+          </details>
+        ) : (
+          <div className="row" style={{ alignItems: "flex-start" }}>{allButtons}</div>
+        )}
+        {check.deposit && <p className="small err">{check.deposit}</p>}
       </div>
 
       <div className="card">
@@ -107,10 +191,15 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
           Locks the current price from your vault balance. If you win you pay the price at the moment your intent was submitted and
           the remainder is returned.
         </p>
+        {processing > 0 && (
+          <div className="warnbox">
+            Another intent is pending. If it settles first, your locked bUSD is unlocked. If it is rejected, this auction stays open.
+          </div>
+        )}
         <TxButton
           chainId={chainId}
           label="4. Submit purchase intent"
-          disabled={!active || !enabledHere || (vaultBal.data ?? 0n) === 0n}
+          disabled={!active || !enabledHere || (vaultBal.data ?? 0n) === 0n || Boolean(check.submit)}
           request={async () => {
             // Read the price the escrow itself would compute now; it only falls afterwards, so locking it covers the intent.
             const price = await publicClientFor(CANONICAL_CHAIN.id).readContract({
@@ -124,6 +213,8 @@ export default function BuyerPanel({ campaign }: { campaign: Campaign }) {
           onDone={refresh}
         />
         {!active && <p className="small">This campaign is no longer active.</p>}
+        {active && check.submit && <p className="small err">{check.submit}</p>}
+        {active && check.warning && <p className="small warn-text">{check.warning}</p>}
       </div>
 
       <MyIntents campaignId={campaign.id} />

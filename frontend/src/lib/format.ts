@@ -15,5 +15,12 @@ export function fmtDuration(seconds: number) {
 
 export function errMessage(e: unknown) {
   const err = e as { shortMessage?: string; message?: string };
-  return err.shortMessage ?? err.message ?? "Unknown error";
+  const raw = err.shortMessage ?? err.message ?? "Unknown error";
+  // When a transaction would revert, wallets cannot estimate gas and fall back to a huge limit that the
+  // network then rejects. Say what that usually means instead of showing the raw RPC text.
+  if (/exceeds max transaction gas limit|gas required exceeds|execution reverted|reverted/i.test(raw)) {
+    return `This transaction would fail on-chain, so it was not sent. Check that the earlier steps are done and that you own the token. (${raw})`;
+  }
+  if (/user rejected|denied transaction/i.test(raw)) return "You rejected the request in your wallet.";
+  return raw;
 }

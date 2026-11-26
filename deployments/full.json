@@ -1,0 +1,38 @@
+{
+  "description": "Full BidaFlux deployment: Base Sepolia escrow + vault, Unichain Sepolia vault, Lasna ReactiveCoordinator",
+  "deployer": "0x55C7B549885F66b6d8b1713A7C17C3FF2B0E0986",
+  "rvmAddr": "0x08aD64aEa58131dD168f13F3aeE4a2B872f5Ee18",
+  "note": "Addresses repeat across chains where the deployer's nonce matched; always read an entry together with its chain.",
+  "base_sepolia": {
+    "chainId": 84532,
+    "callbackProxy": "0x476F44b11F5C942c58f4c8E3d0300E5710743585",
+    "block": 59572127,
+    "contracts": {
+      "MockToken":     { "address": "0x075E248d1123239dfb2B025989807226Cb19F887", "tx": "0xcffd191c1b0a1b6c6095e9e980aa9adf5c703939f3c65d79846237928a04da26" },
+      "DemoNFT":       { "address": "0xcAE686F0DeC9c07F0C077F9977Ccd50b56986336", "tx": "0x914a5811cb466ecd3e4a9a3aef3951b6f921e637afc92382cbcad3ca4f2227f6" },
+      "AuctionEscrow": { "address": "0xD7D02c519ef66C046c28299bf5f79A5733297aed", "tx": "0x9031b22be078629e19910ff1896d9c657248c7119a742abf79d873d662d9b89e" },
+      "PaymentVault":  { "address": "0x66964e7F1d93a25b193c2FAF79686377882e5679", "tx": "0xed8f2267e5c1e0ed3497feb973a2ea7923c4206fdb502480b10045174f41d98f" }
+    },
+    "reserveDeposits": [
+      { "for": "AuctionEscrow", "wei": "1000000000000000", "tx": "0xc70507db8ecdb4318c0558c17d96ac4e8a69c81291e1d7cbf9ae7ed9ab3fd0f9" },
+      { "for": "PaymentVault",  "wei": "1000000000000000", "tx": "0x521aa0390c1bb113d31ef837c3f0b6f6873d7e85f0f80f3401db48cc1185be1a" }
+    ]
+  },
+  "unichain_sepolia": {
+    "chainId": 1301,
+    "callbackProxy": "0x775c9B990ADe401060B78D0e98684eEf8d2466C1",
+    "contracts": {
+      "MockToken":    { "address": "0x5c5C8665abd4812f7a61703D9e5A3697a5cd846c", "tx": "0x477410f1a30ae792085a2010250c515743e86206583e0e89597d634554c27a0a", "block": 67984225 },
+      "PaymentVault": { "address": "0x075E248d1123239dfb2B025989807226Cb19F887", "tx": "0xfe445961216998a80670c3f3e4a5fc247a69a81fabe0f3b2f85dfddeeb44fd9c", "block": 67984226 }
+    },
+    "reserveDeposits": [
+      { "for": "PaymentVault", "wei": "2000000000000000", "tx": "0x055465752a0fb7e902572a2bdda72131483bb7e0c913e52f20c6649ce1f52ef9" }
+    ]
+  },
+  "lasna": {
+    "chainId": 5318007,
+    "contracts": {
+      "ReactiveCoordinator": { "address": "0x08aD64aEa58131dD168f13F3aeE4a2B872f5Ee18", "tx": "0x445d73fc981091f786d0fe5eade23d5ee7bac932cb25dc2a8790b8fcb73745f2", "block": 8493684, "fundedWei": "300000000000000000" }
+    }
+  }
+}
